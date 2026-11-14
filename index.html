@@ -44,9 +44,16 @@
           <ul class="meta" id="m-meta"></ul>
         </section>
 
+        <section class="block" aria-labelledby="obj-title-plan">
+          <h2 class="heading-6" id="obj-title-plan">Targets</h2>
+          <p class="body-6 muted">Tick what the crew should do on this tour. The planner finds the shortest safe order to visit them.</p>
+          <ul class="obj-list" id="obj-select"></ul>
+        </section>
+
         <section class="block" aria-labelledby="routes-title">
           <h2 class="heading-6" id="routes-title">Choose your route</h2>
           <div class="route-list" id="route-list" role="radiogroup" aria-labelledby="routes-title"></div>
+          <p class="caption-5 muted plan-info" id="plan-info"></p>
         </section>
 
         <section class="block">
@@ -134,7 +141,7 @@
           <label class="opt body-6"><input type="radio" name="base" value="mola"> MOLA elevation, colour shaded</label>
           <p class="title-5 muted">Overlays</p>
           <label class="opt body-6"><input type="checkbox" id="ov-routes" checked> Route options</label>
-          <label class="opt body-6"><input type="checkbox" id="ov-hazards" checked> Hazards and science targets</label>
+          <label class="opt body-6"><input type="checkbox" id="ov-hazards" checked> Hazard map: steep slopes, boulders, sand</label>
           <label class="opt body-6"><input type="checkbox" id="ov-traverse"> Perseverance's real path <span class="caption-5 muted" id="traverse-note"></span></label>
         </div>
       </div>
@@ -228,6 +235,7 @@
 
   <script src="data/missions.js"></script>
   <script src="marsmap.js"></script>
+  <script src="planner.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -13,8 +13,8 @@
   const RULES = {
     speedKmh: 6,            // pressurised rover on firm ground
     sandSlowdown: 0.5,      // 100 % sand would be 50 % slower
-    o2PerKm: 2,             // life support % per km
-    o2Per20mClimb: 1,       // life support % per 20 m climbed
+    o2PerKm: 1.5,           // life support % per km
+    o2Per20mClimb: 0.5,     // life support % per 20 m climbed
     stopO2: 2,              // walking EVA at each stop
     stopMinutes: 30,
     powerPerKm: 1,          // rover power % per km
@@ -50,89 +50,65 @@
   const mission = () => D.missions[state.missionIdx];
   const route = () => mission().routes[state.routeIdx];
 
-  // ---------- Route geometry ----------
-  // Smooth the hand placed points (Catmull Rom), then measure along the Mars sphere.
-  function densify(pts, steps = 40) {
-    if (pts.length < 3) {
-      const out = [];
-      for (let i = 0; i <= steps; i++) { const t = i / steps; out.push([pts[0][0] + (pts[1][0] - pts[0][0]) * t, pts[0][1] + (pts[1][1] - pts[0][1]) * t]); }
-      return out;
-    }
-    const out = [pts[0]];
-    for (let i = 0; i < pts.length - 1; i++) {
-      const p0 = pts[i - 1] || pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] || p2;
-      for (let s = 1; s <= steps; s++) {
-        const t = s / steps, t2 = t * t, t3 = t2 * t;
-        const f = (a, b, c, d) => 0.5 * (2 * b + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t2 + (-a + 3 * b - 3 * c + d) * t3);
-        out.push([f(p0[0], p1[0], p2[0], p3[0]), f(p0[1], p1[1], p2[1], p3[1])]);
-      }
-    }
-    return out;
+  // ---------- Route planning ----------
+  // Routes come from planner.js: a terrain cost map, Dijkstra between every
+  // pair of targets, and a depth first search over visiting orders.
+  const Planner = window.MomootPlanner;
+  const TYPE = { sample: { label: "Sample", icon: "ph-flask" }, photo: { label: "Photo", icon: "ph-camera" }, measure: { label: "Measure", icon: "ph-gauge" } };
+  state.selected = {};
+  for (const m of D.missions) state.selected[m.id] = new Set(m.objectives.filter((o) => !o.bonus).map((o) => o.id));
+
+  function measureLine(r) {
+    r.cum = [0];
+    for (let i = 1; i < r.dense.length; i++) r.cum.push(r.cum[i - 1] + MarsMap.distanceKm(r.dense[i - 1], r.dense[i]));
+    r.km = r.cum[r.cum.length - 1];
   }
-  // Organic wiggle between control points so tours look driven, not ruled.
-  // Deterministic per route, zero at every control point so landmarks stay put.
-  function meander(dense, steps, seed) {
-    const k = Math.cos((18.44 * Math.PI) / 180);
-    let s = seed * 7.13, dist = 0;
-    const out = dense.map((p) => p.slice());
-    for (let i = 1; i < dense.length - 1; i++) {
-      const a = dense[i - 1], b = dense[i + 1];
-      const dx = (b[1] - a[1]) * k, dy = b[0] - a[0];
-      const len = Math.hypot(dx, dy) || 1;
-      dist += Math.hypot((dense[i][1] - a[1]) * k, dense[i][0] - a[0]) * 59.3;
-      const segIdx = Math.floor(i / steps), t = (i % steps) / steps;
-      const c0 = dense[segIdx * steps], c1 = dense[Math.min(dense.length - 1, (segIdx + 1) * steps)];
-      const segDeg = Math.hypot((c1[1] - c0[1]) * k, c1[0] - c0[0]);
-      const amp = Math.min(0.0011, segDeg * 0.14) * Math.sin(Math.PI * t);
-      const n = 0.6 * Math.sin(dist * 7.0 + s) + 0.3 * Math.sin(dist * 17.9 + s * 1.7) + 0.1 * Math.sin(dist * 52.0 + s * 2.3);
-      out[i][0] += (dx / len) * amp * n;
-      out[i][1] += (-dy / len) * amp * n / k;
-    }
-    return out;
-  }
-  function nearestIdx(r, pos) {
-    let best = 0, bd = Infinity;
-    for (let i = 0; i < r.dense.length; i++) {
-      const d = MarsMap.distanceKm(r.dense[i], pos);
-      if (d < 0.03) return i;
-      if (d < bd) { bd = d; best = i; }
-    }
-    return best;
-  }
-  for (const m of D.missions) {
-    for (const [ri, r] of m.routes.entries()) {
-      r.dense = meander(densify(r.points), 40, ri + m.id.length);
-      r.cum = [0];
-      for (let i = 1; i < r.dense.length; i++) r.cum.push(r.cum[i - 1] + MarsMap.distanceKm(r.dense[i - 1], r.dense[i]));
-      r.km = r.cum[r.cum.length - 1];
-      // stops: place each on the route, then the mission target
-      r.stops.forEach((s) => { s.at = s.pos ? r.cum[nearestIdx(r, s.pos)] / r.km : s.at; });
-      const tAt = r.cum[nearestIdx(r, m.target.pos)] / r.km;
-      r.allStops = [...r.stops.map((s, i) => ({ ...s, key: `stop${i}` })), { ...m.finalStop, at: tAt, key: "target", target: true }].sort((x, y) => x.at - y.at);
-      const sandF = 1 + (r.terrain.sand / 100) * RULES.sandSlowdown;
+
+  function planMission(m) {
+    const sel = state.selected[m.id];
+    m.routes = Object.entries(D.profiles).map(([id, W]) => {
+      const targets = m.objectives.filter((o) => sel.has(o.id) || (W.bonus && o.bonus));
+      const plan = Planner.plan(D, targets, W);
+      const r = { id, label: W.label, note: W.note, color: W.color, plan, targets };
+      r.dense = plan.line;
+      measureLine(r);
+      // where each target sits along the line (end of its leg)
+      let acc = 0;
+      r.allStops = plan.order.map((ti, k) => {
+        for (let i = 1; i < plan.legs[k].length; i++) acc += MarsMap.distanceKm(plan.legs[k][i - 1], plan.legs[k][i]);
+        const o = targets[ti];
+        return { ...o, key: o.id, at: acc / r.km, order: k + 1, target: !!o.main };
+      });
+      const an = Planner.analyse(D, r.dense, r.cum);
+      r.climb = Math.round(an.climb);
+      const e0 = an.elev[0];
+      r.profileKm = r.cum; r.profileElev = an.elev.map((v) => v - e0);
+      r.terrain = an.terrain;
+      r.steepKm = an.steepKm;
+      // terrain events where the line first enters sand or boulders, plus the mission's weather
+      const ev = [];
+      const firstSand = an.hazards.find((h) => h.type === "sand"), firstRock = an.hazards.find((h) => h.type === "rock");
+      if (firstRock) ev.push({ type: "rock", at: firstRock.km / r.km });
+      if (firstSand) ev.push({ type: "sand", at: firstSand.km / r.km });
+      for (const w of m.weather) ev.push({ ...w });
+      ev.sort((x, y) => x.at - y.at);
+      r.events = ev.filter((x, i) => i === 0 || x.at - ev[i - 1].at > 0.06).slice(0, 3);
+      r.risk = clamp(1 + (firstRock ? 1 : 0) + (firstSand || r.steepKm > 0.15 ? 1 : 0), 1, 3);
+      const sandF = 1 + (an.terrain.sand / 100) * RULES.sandSlowdown;
       r.minPerKm = (60 / RULES.speedKmh) * sandF;
-      r.totalMinutes = r.km * r.minPerKm + r.allStops.length * RULES.stopMinutes;
+      const stopMin = r.allStops.reduce((t, s) => t + (s.minutes || RULES.stopMinutes), 0);
+      r.totalMinutes = r.km * r.minPerKm + stopMin;
       r.o2Total = Math.round(r.km * RULES.o2PerKm + (r.climb / 20) * RULES.o2Per20mClimb + r.allStops.length * RULES.stopO2);
-      r.profile = makeProfile(r, tAt, ri);
-    }
+      return r;
+    });
   }
-  // Elevation along the tour: rises toward the target, falls on the way home, with terrain texture
-  function makeProfile(r, tAt, seed) {
-    const n = 48, out = [];
-    for (let i = 0; i < n; i++) {
-      const t = i / (n - 1);
-      const base = t <= tAt ? Math.pow(t / tAt, 1.3) : Math.pow((1 - t) / (1 - tAt), 1.1);
-      const tex = 0.06 * Math.sin(t * 23 + seed) + 0.04 * Math.sin(t * 61 + seed * 2);
-      out.push(Math.max(0, r.climb * (base + tex * Math.sin(Math.PI * t))));
-    }
-    const mx = Math.max(...out) || 1;
-    return out.map((v) => (v / mx) * r.climb);
-  }
+  for (const m of D.missions) planMission(m);
+
   function pointAtKm(r, km) {
     km = clamp(km, 0, r.km);
-    let i = 1;
-    while (i < r.cum.length - 1 && r.cum[i] < km) i++;
-    const a = r.dense[i - 1], b = r.dense[i];
+    let lo = 1, hi = r.cum.length - 1;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (r.cum[mid] < km) lo = mid + 1; else hi = mid; }
+    const i = lo, a = r.dense[i - 1], b = r.dense[i];
     const seg = r.cum[i] - r.cum[i - 1] || 1;
     const t = (km - r.cum[i - 1]) / seg;
     return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
@@ -170,6 +146,9 @@
   map.on("render", () => { if (Object.values(L).some((l) => l.loads > 0)) $("#map-status").hidden = true; });
 
   // SVG overlay groups
+  const gHaz = svg("g", {}, map.svg);
+  const hazImg = Planner.hazardImage(D);
+  const hazEl = svg("image", { href: hazImg.url, preserveAspectRatio: "none", opacity: 0.6, style: "image-rendering: pixelated" }, gHaz);
   const gTraverse = svg("g", {}, map.svg);
   const gRoutes = svg("g", {}, map.svg);
   const gEva = svg("g", {}, map.svg);
@@ -209,6 +188,14 @@
   }
 
   function drawOverlays() {
+    // hazard map from the planner's cost grid
+    gHaz.style.display = state.showHazards ? "" : "none";
+    if (state.showHazards) {
+      const [[s, w], [n, e]] = hazImg.bounds;
+      const a = map.toScreen(n, w), b = map.toScreen(s, e);
+      hazEl.setAttribute("x", a.x); hazEl.setAttribute("y", a.y);
+      hazEl.setAttribute("width", Math.max(1, b.x - a.x)); hazEl.setAttribute("height", Math.max(1, b.y - a.y));
+    }
     // Perseverance traverse
     gTraverse.innerHTML = "";
     if (state.showTraverse && state.traverse) {
@@ -280,7 +267,7 @@
   function buildMarkers() {
     const m = mission(), r = route();
     const list = [];
-    const stopPts = r.stops.map((s) => pointAt(r, s.at));
+    const stopPts = [...r.allStops.map((s) => s.pos), ...m.objectives.map((o) => o.pos)];
     for (const lm of D.landmarks) {
       if (stopPts.some((p) => MarsMap.distanceKm(p, lm.pos) < 0.05)) continue; // a stop already marks this spot
       list.push({ pos: lm.pos, el: pinEl("landmark", "", lm.name, lm.note) });
@@ -292,10 +279,22 @@
         }
       }
     }
-    let sn = 0;
-    r.allStops.forEach((s) => { if (!s.target) list.push({ pos: pointAt(r, s.at), el: pinEl("stop", String(++sn), s.name, null, r.color) }); });
+    // targets not on this route: faint, click to add
+    const onRoute = new Set(r.allStops.map((s) => s.id));
+    if (!state.run) {
+      for (const o of m.objectives) {
+        if (onRoute.has(o.id)) continue;
+        const el = pinEl("off", "+", o.name, `${TYPE[o.type].label} · +${o.points} pts${o.bonus ? " · bonus" : ""}`);
+        el.classList.add("clickable"); el.title = "Add this target";
+        el.addEventListener("click", (e) => { e.stopPropagation(); toggleObjective(o.id, true); });
+        list.push({ pos: o.pos, el });
+      }
+    }
+    for (const s of r.allStops) {
+      const el = pinEl(s.main ? "target" : "stop", String(s.order), s.name, `${TYPE[s.type].label} · +${s.points} pts`, s.main ? null : r.color);
+      list.push({ pos: s.pos, el });
+    }
     list.push({ pos: D.habitat.pos, el: pinEl("", "A", "Habitat") });
-    list.push({ pos: m.target.pos, el: pinEl("target", "B", m.target.name, state.showHazards ? m.target.dataNote : null) });
     state.playerMarker = null;
     if (state.run) {
       const el = html("div", { class: "mm-marker" });
@@ -309,7 +308,7 @@
 
   function fitRoute(all = true, ms = 700) {
     const m = mission();
-    const pts = [D.habitat.pos, m.target.pos, ...(all ? m.routes.flatMap((r) => r.dense) : route().dense)];
+    const pts = [D.habitat.pos, ...m.objectives.map((o) => o.pos), ...(all ? m.routes.flatMap((r) => r.dense) : route().dense)];
     const v = map.fitBounds(pts, 90, 16.5);
     map.flyTo(v.lat, v.lon, v.zoom, ms);
   }
@@ -357,7 +356,7 @@
   });
   document.querySelectorAll('input[name="base"]').forEach((r) => r.addEventListener("change", (e) => setBase(e.target.value)));
   $("#ov-routes").addEventListener("change", (e) => { state.showRoutes = e.target.checked; drawOverlays(); });
-  $("#ov-hazards").addEventListener("change", (e) => { state.showHazards = e.target.checked; buildMarkers(); });
+  $("#ov-hazards").addEventListener("change", (e) => { state.showHazards = e.target.checked; buildMarkers(); drawOverlays(); });
   $("#ov-traverse").addEventListener("change", (e) => {
     state.showTraverse = e.target.checked;
     if (state.showTraverse && !state.traverse) loadTraverse(); else drawOverlays();
@@ -405,8 +404,9 @@
     const meta = $("#m-meta"); meta.innerHTML = "";
     const addMeta = (icon, label, val) => { const li = html("li"); li.innerHTML = `<i class="ph ${icon}" aria-hidden="true"></i>`; li.append(document.createTextNode(label + " "), html("strong", {}, val)); meta.append(li); };
     addMeta("ph-mountains", "Difficulty", ["", "Easy", "Moderate", "Hard"][m.difficulty]);
-    addMeta("ph-star", "Reward", `+${m.finalStop.points} pts`);
-    addMeta("ph-map-pin", "Target", fmtLatLon(m.target.pos[0], m.target.pos[1]));
+    addMeta("ph-star", "Reward", `+${r.allStops.reduce((t, s) => t + s.points, 0)} pts`);
+    addMeta("ph-flag-banner", "Targets", `${r.allStops.length}`);
+    renderObjectives(m, r);
 
     const list = $("#route-list"); list.innerHTML = "";
     m.routes.forEach((rt, i) => {
@@ -432,12 +432,13 @@
     renderProfile(r, m);
 
     const mix = $("#route-mix"); mix.innerHTML = "";
-    const cols = { bedrock: "#8E4B2C", gravel: "#C9905F", sand: "#EBCB9F" };
+    const cols = { firm: "#8E4B2C", sand: "#EBCB9F", rocky: "#F5B400" };
+    const names = { firm: "Firm ground", sand: "Loose sand", rocky: "Boulders" };
     const leg = $("#route-mix-legend"); leg.innerHTML = "";
-    for (const k of ["bedrock", "gravel", "sand"]) {
+    for (const k of ["firm", "sand", "rocky"]) {
       const s = html("span"); s.style.width = `${r.terrain[k]}%`; s.style.background = cols[k]; mix.append(s);
       const li = html("li"); const sw = html("i"); sw.style.background = cols[k];
-      li.append(sw, document.createTextNode(`${k[0].toUpperCase() + k.slice(1)} ${r.terrain[k]} %`)); leg.append(li);
+      li.append(sw, document.createTextNode(`${names[k]} ${r.terrain[k]} %`)); leg.append(li);
     }
 
     const riskCols = ["#2E9E52", "#C27803", "#C8322B"];
@@ -448,32 +449,65 @@
 
   function renderProfile(r, m) {
     const s = $("#route-profile"); s.innerHTML = "";
-    const W = 480, H = 120, l = 48, rr = 12, t = 12, b = 28;
-    const maxC = Math.max(...m.routes.map((x) => x.climb), 10);
-    const top0 = maxC > 200 ? 100 : 10;
-    const top = Math.ceil(maxC / top0) * top0;
-    const X = (i) => l + (i / (r.profile.length - 1)) * (W - l - rr);
-    const Y = (v) => t + (1 - v / top) * (H - t - b);
-    for (const v of [0, top / 2, top]) {
+    const W = 480, H = 120, l = 52, rr = 12, t = 12, b = 28;
+    const all = m.routes.flatMap((x) => x.profileElev);
+    const lo = Math.min(0, ...all), hiRaw = Math.max(10, ...all);
+    const step = hiRaw - lo > 300 ? 100 : hiRaw - lo > 60 ? 20 : 10;
+    const bot = Math.floor(lo / step) * step, top = Math.ceil(hiRaw / step) * step;
+    const X = (km) => l + (km / r.km) * (W - l - rr);
+    const Y = (v) => t + (1 - (v - bot) / (top - bot)) * (H - t - b);
+    for (const v of [bot, (bot + top) / 2, top]) {
       svg("line", { x1: l, x2: W - rr, y1: Y(v), y2: Y(v), stroke: "#DEDAD1", "stroke-width": 1 }, s);
-      const tx = svg("text", { x: l - 8, y: Y(v) + 4, "text-anchor": "end", "font-size": 12, "font-family": "Poppins, sans-serif", fill: "#8C877D" }, s); tx.textContent = `${v} m`;
+      const tx = svg("text", { x: l - 8, y: Y(v) + 4, "text-anchor": "end", "font-size": 12, "font-family": "Poppins, sans-serif", fill: "#8C877D" }, s); tx.textContent = `${Math.round(v)} m`;
     }
-    const line = r.profile.map((v, i) => `${i ? "L" : "M"}${X(i).toFixed(1)} ${Y(v).toFixed(1)}`).join(" ");
-    svg("path", { d: `${line} L${X(r.profile.length - 1)} ${Y(0)} L${X(0)} ${Y(0)}Z`, fill: r.color, opacity: 0.18 }, s);
-    svg("path", { d: line, fill: "none", stroke: r.color, "stroke-width": 2.5 }, s);
-    const a = svg("text", { x: l, y: H - 8, "font-size": 12, "font-family": "Poppins, sans-serif", fill: "#8C877D" }, s); a.textContent = "0 km";
+    const n = r.profileElev.length, stepI = Math.max(1, Math.floor(n / 240));
+    let line = "";
+    for (let i = 0; i < n; i += stepI) line += `${line ? "L" : "M"}${X(r.profileKm[i]).toFixed(1)} ${Y(r.profileElev[i]).toFixed(1)}`;
+    line += `L${X(r.km).toFixed(1)} ${Y(r.profileElev[n - 1]).toFixed(1)}`;
+    svg("path", { d: `${line} L${X(r.km)} ${Y(bot)} L${X(0)} ${Y(bot)}Z`, fill: r.color, opacity: 0.18 }, s);
+    svg("path", { d: line, fill: "none", stroke: r.color, "stroke-width": 2 }, s);
+    for (const st of r.allStops) {
+      const x = X(st.at * r.km);
+      svg("line", { x1: x, x2: x, y1: t, y2: H - b, stroke: st.main ? "#C2410C" : r.color, "stroke-width": 1, "stroke-dasharray": "3 3" }, s);
+      const tx = svg("text", { x, y: t + 2, "text-anchor": "middle", "font-size": 11, "font-family": "Poppins, sans-serif", "font-weight": 600, fill: st.main ? "#C2410C" : "#615D55" }, s); tx.textContent = String(st.order);
+    }
+    const a0 = svg("text", { x: l, y: H - 8, "font-size": 12, "font-family": "Poppins, sans-serif", fill: "#8C877D" }, s); a0.textContent = "0 km";
     const z = svg("text", { x: W - rr, y: H - 8, "text-anchor": "end", "font-size": 12, "font-family": "Poppins, sans-serif", fill: "#8C877D" }, s); z.textContent = `${r.km.toFixed(1)} km`;
+  }
+
+  // Target picker and planner stats
+  function renderObjectives(m, r) {
+    const ul = $("#obj-select"); ul.innerHTML = "";
+    const sel = state.selected[m.id];
+    for (const o of m.objectives) {
+      const li = html("li");
+      const lab = html("label", { class: "obj body-6" });
+      const cb = html("input", { type: "checkbox" }); cb.checked = sel.has(o.id);
+      cb.addEventListener("change", () => toggleObjective(o.id, cb.checked));
+      const ic = html("i", { class: `ph ${TYPE[o.type].icon}`, "aria-hidden": "true" });
+      const txt = html("span", { class: "obj-name" }, o.name);
+      const tag = html("span", { class: "caption-5 muted" }, `${TYPE[o.type].label} · +${o.points} pts${o.main ? " · main" : ""}${o.bonus ? " · bonus" : ""}`);
+      lab.append(cb, ic, txt, tag);
+      li.append(lab);
+      ul.append(li);
+    }
+    const p = r.plan;
+    $("#plan-info").textContent = `Planner checked ${p.nodes.toLocaleString("en")} search steps over ${p.orders.toLocaleString("en")} possible orders in ${Math.max(1, Math.round(p.ms))} ms. Best order: ${r.allStops.map((s) => s.order + " " + s.name.split(" ").slice(0, 2).join(" ")).join(" → ")}.${p.relaxed ? " Some targets needed steeper ground than this profile allows." : ""}`;
+  }
+
+  function toggleObjective(id, on) {
+    const m = mission(), sel = state.selected[m.id];
+    if (on) sel.add(id); else if (sel.size > 1) sel.delete(id); else { toast("Keep at least one target on the tour."); renderPlan(); return; }
+    planMission(m);
+    renderPlan(); buildMarkers(); drawOverlays();
   }
 
   function renderWaypoints(r, m) {
     const ol = $("#waypoints"); ol.innerHTML = "";
     ol.style.setProperty("--route-color", r.color);
     const items = [{ badge: "A", cls: "", name: "Habitat", km: 0, pos: D.habitat.pos, sub: "Board the rover and head out" }];
-    let n = 0;
     for (const s of r.allStops) {
-      items.push(s.target
-        ? { badge: "B", cls: "target", name: s.name, km: s.at * r.km, pos: m.target.pos, sub: s.detail, photo: s.photo }
-        : { badge: String(++n), cls: "stop", name: s.name, km: s.at * r.km, pos: pointAt(r, s.at), sub: s.detail, photo: s.photo });
+      items.push({ badge: String(s.order), cls: s.main ? "target" : "stop", name: s.name, km: s.at * r.km, pos: s.pos, sub: `${TYPE[s.type].label} · ${s.minutes} min · +${s.points} pts. ${s.detail}`, photo: s.photo });
     }
     items.push({ badge: "A", cls: "", name: "Back at the habitat", km: r.km, pos: D.habitat.pos, sub: "Tour complete" });
     for (const it of items) {
@@ -534,7 +568,7 @@
     const run = state.run;
     $("#obj-mission").textContent = run.m.name;
     const items = [{ key: "leave", label: "Leave the habitat" }];
-    run.r.allStops.forEach((s) => items.push({ key: s.key, label: s.target ? `${s.name} (target)` : s.name }));
+    run.r.allStops.forEach((s) => items.push({ key: s.key, label: s.main ? `${s.name} (main)` : s.name }));
     items.push({ key: "home", label: "Return to the habitat" });
     const ol = $("#obj-list"); ol.innerHTML = "";
     let nowSet = false;
@@ -621,12 +655,13 @@
   function arriveStop(stop, key) {
     const run = state.run;
     run.atStop = { stop, key };
-    $("#stop-kicker").textContent = key === "target" ? "Mission target reached" : "Science stop";
+    $("#stop-kicker").textContent = `${stop.main ? "Main target" : "Target " + stop.order} · ${TYPE[stop.type].label}`;
     $("#stop-name").textContent = stop.name;
     $("#stop-detail").textContent = stop.detail;
     renderPhoto($("#stop-photo"), stop.photo, stop.name);
     const b = $("#btn-sample"); b.innerHTML = "";
-    b.append(document.createTextNode(`Collect sample · +${stop.points} pts `), html("kbd", { class: "key" }, "S"));
+    const verb = { sample: "Collect sample", photo: "Take photos", measure: "Take measurement" }[stop.type] || "Collect sample";
+    b.append(document.createTextNode(`${verb} · +${stop.points} pts `), html("kbd", { class: "key" }, "S"));
     $("#stop-card").hidden = false;
     $("#stop-card").scrollIntoView({ block: "nearest", behavior: "smooth" });
     b.focus({ preventScroll: true });
@@ -636,11 +671,12 @@
     const run = state.run; if (!run || !run.atStop) return;
     const { stop, key } = run.atStop;
     run.science += stop.points; run.done.add(key);
-    run.minutes += RULES.stopMinutes; run.o2 -= RULES.stopO2; run.dose += RULES.stopMinutes * RULES.dosePerMinute;
+    const mins = stop.minutes || RULES.stopMinutes;
+    run.minutes += mins; run.o2 -= RULES.stopO2; run.dose += mins * RULES.dosePerMinute;
     run.log.push(`Collected a sample at ${stop.name} (+${stop.points} pts)`);
     run.atStop = null;
     $("#stop-card").hidden = true;
-    if (key === "target") run.log.push("Mission target done, heading home");
+    if (stop.main) run.log.push("Main target done");
     renderChecklist();
   }
 

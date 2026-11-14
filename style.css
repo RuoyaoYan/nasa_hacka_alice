@@ -330,3 +330,15 @@ body:not([data-screen="eva"]):not([data-screen="event"]):not([data-screen="end"]
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-property: opacity, background-color, border-color !important; }
 }
+
+/* Targets picker */
+.obj-list { display: flex; flex-direction: column; gap: var(--s-50); margin-top: var(--s-200) !important; }
+.obj { display: grid; grid-template-columns: 20px 20px 1fr auto; align-items: center; gap: var(--s-75); padding: var(--s-75) var(--s-100); background: var(--surface); border: 1px solid var(--line); cursor: pointer; transition: border-color var(--t-color) var(--ease); }
+.obj:hover { border-color: var(--line-strong); }
+.obj input { accent-color: var(--accent); width: 16px; height: 16px; }
+.obj i { font-size: 18px; color: var(--accent); }
+.obj-name { color: var(--text); }
+.plan-info { margin-top: var(--s-100) !important; }
+.pin.off { width: 22px; height: 22px; background: rgba(255,255,255,0.85); color: var(--text); border: 2px dashed var(--text); font-size: 14px; }
+.mm-marker.clickable { pointer-events: auto; cursor: pointer; }
+.mm-marker.clickable:hover .pin.off { background: #FFFFFF; }

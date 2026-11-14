@@ -90,27 +90,53 @@ your path, and copy the logged `[lat, lon]` points from the browser console into
 `assets/photos/dunes.jpg` and `assets/photos/rim.jpg`. Until then, stops show a
 drawn illustration.
 
+## How routes are planned
+
+Routes are not drawn by hand. Real traverses wind because the crew has several
+things to do (collect samples, take photos, take measurements) and has to avoid
+danger on the way. `planner.js` solves exactly that:
+
+1. **Terrain cost map.** A grid of 50 m cells over the study area. Each cell has
+   an elevation from a simplified terrain model of Jezero (delta front scarp
+   with the Hawksbill Gap valley, upper fan, Kodiak butte, Belva crater, and the
+   western rim notched by Neretva Vallis), a slope, and whether it lies in loose
+   sand or a boulder field.
+2. **Safest path between every pair of targets.** Dijkstra's algorithm runs from
+   the habitat and from each target. A step costs distance times
+   `1 + steep + sand + boulders`, weighted by the route profile.
+3. **Best visiting order.** A depth first search with branch and bound tries
+   every order of the targets (5 targets = 120 orders) and keeps the cheapest
+   round trip from the habitat.
+4. **Natural lines.** Grid zigzags are straightened where a straight line is just
+   as safe (string pulling), then smoothed with Chaikin corner cutting.
+
+The three options use different risk weights: **Safest** forbids slopes over 12°
+and every boulder field, **Fastest** accepts sand, rocks and slopes up to 25°,
+and **Most science** is a safe route that also visits the bonus targets. Tick
+targets on or off in the panel, or click a faint **+** marker on the map, and all
+three are re-planned instantly. Terrain events (boulders, sand) fire where the
+chosen route actually enters those zones.
+
 ## Game rules
 
 Tours are driven in a pressurised crew rover, with a walking EVA at every stop.
 These are simple game rules, **not real mission figures**:
 
 - Rover speed 6 km/h on firm ground, up to 50 % slower on sand
-- Life support: 2 % per km, plus 1 % per 20 m climbed, plus 2 % per stop
+- Life support: 1.5 % per km, plus 0.5 % per 20 m climbed, plus 2 % per target
 - 30 minutes per stop
 - Radiation background uses roughly the surface average Curiosity's RAD measured
   (about 0.64 mSv per day); event doses are game values
 
 ## Missions
 
-| Mission | Difficulty | Tours | Passes |
+| Mission | Difficulty | Targets | Typical tour |
 |---|---|---|---|
-| Delta front loop | Easy | 6 to 9 km | Hawksbill Gap, Three Forks depot, Séítah, Kodiak |
-| Climb to Belva crater | Moderate | 11 to 14 km | Upper fan, Enchanted Lake, landing site |
-| Crater rim expedition | Hard | 17 to 20 km | Lookout Hill, Neretva Vallis, Belva, Kodiak |
+| Delta front survey | Easy | Hawksbill Gap clay, Three Forks depot, Enchanted Lake, Séítah wind, landing site (+2 bonus) | 8 to 10 km |
+| Upper fan and Belva crater | Moderate | Belva crater wall, Hawksbill Gap, depot inventory, Enchanted Lake, upper fan boulders (+2 bonus) | 11 to 14 km |
+| Crater rim expedition | Hard | Lookout Hill rim rock, Neretva Vallis, Belva, rim slope radiation, Kodiak (+2 bonus) | 19 to 24 km |
 
-Routes are smoothed through hand placed control points with a gentle organic
-wiggle, so they read like driven tracks. Landmark positions are approximate.
+Landmark positions and the terrain model are approximate, for gameplay.
 
 ## Project structure
 
@@ -118,6 +144,7 @@ wiggle, so they read like driven tracks. Landmark positions are approximate.
 index.html          layout: details column, map card, dialogs
 style.css           design tokens and components (square corners throughout)
 marsmap.js          small slippy map engine for NASA Mars Trek tiles
+planner.js          terrain cost map, Dijkstra, DFS visiting order, smoothing
 app.js              planning, route overlays, EVA loop, events, scoring
 data/missions.js    missions, routes, stops, events, terrain
 assets/fonts/       Poppins (SIL Open Font License)
