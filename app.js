@@ -197,6 +197,12 @@
       const a = map.toScreen(n, w), b = map.toScreen(s, e);
       hazEl.setAttribute("x", a.x); hazEl.setAttribute("y", a.y);
       hazEl.setAttribute("width", Math.max(1, b.x - a.x)); hazEl.setAttribute("height", Math.max(1, b.y - a.y));
+      for (const f of fieldEls) {
+        const [[fs, fw], [fn, fe]] = f.bounds;
+        const p = map.toScreen(fn, fw), q = map.toScreen(fs, fe);
+        f.el.setAttribute("x", p.x); f.el.setAttribute("y", p.y);
+        f.el.setAttribute("width", Math.max(1, q.x - p.x)); f.el.setAttribute("height", Math.max(1, q.y - p.y));
+      }
     }
     // Perseverance traverse
     gTraverse.innerHTML = "";
@@ -846,9 +852,13 @@
   // ---------- Real hazard data ----------
   // 1) cost_matrix.json from tools/terrain_hazard (HiRISE DTM: slopes, craters, rocks), if present
   // 2) live scan of the HiRISE tiles for shadows next to sunlit slopes
+  const fieldEls = [];
   function replanAll(msg) {
     hazImg = Planner.hazardImage(D);
     hazEl.setAttribute("href", hazImg.url);
+    // precise detected hazard outlines, drawn at the detector's own resolution
+    fieldEls.forEach((f) => f.el.remove()); fieldEls.length = 0;
+    for (const f of Planner.fieldImages()) fieldEls.push({ el: svg("image", { href: f.url, preserveAspectRatio: "none" }, gHaz), bounds: f.bounds });
     for (const m of D.missions) planMission(m);
     if (!state.run) { renderPlan(); buildMarkers(); }
     drawOverlays();

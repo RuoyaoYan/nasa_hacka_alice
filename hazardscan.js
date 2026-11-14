@@ -224,11 +224,27 @@
     const small = downsample(img, 3);
     const coarse = detect(small, 7);             // ~30 m pixels: hills, buttes, crater walls
     const rough = roughness(img);
+    // upsample the coarse mask smoothly (bilinear, then threshold) so outlines follow the real shape
+    const cm = coarse.mask, sW = small.W, sH = small.H;
+    const at = (x, y) => cm[Math.min(sH - 1, Math.max(0, y)) * sW + Math.min(sW - 1, Math.max(0, x))];
+    const relief = new Uint8Array(img.W * img.H);
+    for (let y = 0; y < img.H; y++) for (let x = 0; x < img.W; x++) {
+      const fx = (x + 0.5) / 3 - 0.5, fy = (y + 0.5) / 3 - 0.5;
+      const x0 = Math.floor(fx), y0 = Math.floor(fy), tx = fx - x0, ty = fy - y0;
+      const v = (at(x0, y0) * (1 - tx) + at(x0 + 1, y0) * tx) * (1 - ty) + (at(x0, y0 + 1) * (1 - tx) + at(x0 + 1, y0 + 1) * tx) * ty;
+      relief[y * img.W + x] = fine.mask[y * img.W + x] || v >= 0.5 ? 1 : 0;
+    }
+    // close small gaps and round the outline: 5 x 5 majority filter
     const bits = new Uint8Array(img.W * img.H);
     for (let y = 0; y < img.H; y++) for (let x = 0; x < img.W; x++) {
+      let n = 0, t = 0;
+      for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+        const yy = y + dy, xx = x + dx;
+        if (yy < 0 || xx < 0 || yy >= img.H || xx >= img.W) continue;
+        t++; n += relief[yy * img.W + xx];
+      }
       const i = y * img.W + x;
-      const cy = Math.min(small.H - 1, (y / 3) | 0), cx = Math.min(small.W - 1, (x / 3) | 0);
-      if (fine.mask[i] || coarse.mask[cy * small.W + cx]) bits[i] |= RELIEF;
+      if (relief[i] ? n * 3 >= t : n * 2 > t) bits[i] |= RELIEF;
       if (rough[i]) bits[i] |= ROUGH;
     }
     return { width: img.W, height: img.H, bounds: img.bounds, bits, source: used.name, tiles: img.tiles,
