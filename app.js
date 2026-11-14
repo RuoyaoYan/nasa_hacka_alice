@@ -407,6 +407,12 @@
   });
 
   function loadTraverse() {
+    if (window.M20_WAYPOINTS) { // bundled copy of NASA's waypoint file: no server needed
+      state.traverse = [window.M20_WAYPOINTS.map((w) => [w[0], w[1]])];
+      $("#traverse-note").textContent = "";
+      drawOverlays();
+      return;
+    }
     $("#traverse-note").textContent = "(loading)";
     fetch(D.traverseUrl)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
@@ -474,7 +480,7 @@
   }
 
   // ---------- Route details (Komoot style) ----------
-  const BASE_ELEV = -2560; // Jezero crater floor, metres relative to the Mars datum (approximate)
+  const BASE_ELEV = -2570; // Jezero crater floor, metres relative to the Mars datum (approximate)
   const fmtM = (v) => `${v < 0 ? "−" : ""}${Math.abs(Math.round(v)).toLocaleString("en")} m`;
   const fmtKm = (km) => (km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(km < 10 ? 2 : 1)} km`);
 

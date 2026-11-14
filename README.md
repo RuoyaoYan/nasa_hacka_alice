@@ -110,12 +110,21 @@ Drag to pan, scroll or use **+ / −** to zoom, and use the layers button to
 switch base maps or show Perseverance's real path (loaded from NASA JPL if its
 server allows it). An internet connection is needed for the tiles. The **Open in Mars Trek** button opens the current view in NASA Mars Trek, where you can use its own distance, elevation profile and slope tools to check a route.
 
-**Positions.** Octavia E. Butler Landing (18.4446° N, 77.4509° E) and Belva crater
-(centre 18.48° N, 77.38° E, USGS Gazetteer) are exact. Other targets are placed approximately
-for gameplay; the Octavia E. Butler Landing marker is Perseverance's real landing
-site. To retrace a route precisely on the HiRISE imagery, press `D`, click along
-your path, and copy the logged `[lat, lon]` points from the browser console into
-`data/missions.js`. The cursor position is shown in the corner of the map.
+**Positions.** Stops that Perseverance visited sit exactly where the rover was,
+taken from NASA's waypoint file (`data/m20_waypoints.js`, a copy of
+`M20_waypoints.json`, 708 positions from sol 13 to 2022). For example: Séítah
+(sol 248), Enchanted Lake (sols 415 to 428), Hawksbill Gap (sols 441 to 464),
+Three Forks depot (sols 654 to 686), Echo Creek at Belva (sols 765 to 775), the
+upper fan boulder field (sols 843 to 848), Neretva Vallis (sols 1150 to 1156),
+Dox Castle (sols 1250 to 1288), the rim climb (sol 1295) and Lookout Hill (sol 1354).
+Belva crater's centre follows the USGS gazetteer. Kodiak butte, the isolated hill and
+the sightseeing skyline spot were never visited and are estimates; each line in
+`data/missions.js` says which is which. The same file draws Perseverance's real path
+on the map (Layers, then Perseverance's real path).
+
+**Terrain check.** The elevation model is calibrated against the rover's measured
+elevation at 522 waypoints: the average error (RMS) is 22 m, down from 143 m for the
+first version. Lookout Hill comes out at −1,774 m against −1,786 m measured.
 
 **Photos.** Every task shows a real Perseverance image of that place (or the
 closest one the rover imaged), loaded from NASA's servers when the game runs.

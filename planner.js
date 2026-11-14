@@ -28,14 +28,18 @@
     const kLon = Math.cos((18.45 * Math.PI) / 180);
     const kmTo = (a, b) => Math.hypot((a[0] - b[0]) * KM_PER_DEG, (a[1] - b[1]) * KM_PER_DEG * kLon);
     return (lat, lon) => {
+      // Calibrated against Perseverance's measured elevations (NASA M20 waypoints):
+      // crater floor -2570 m, delta top at Hawksbill Gap about +50 m, upper fan and
+      // Neretva Vallis about +170 to +215 m, Lookout Hill on the rim about +785 m.
       // delta front: scarp line runs north north west from the crater floor
-      const lonFront = 77.405 - (lat - 18.445) * 0.27;
+      const lonFront = 77.409 - (lat - 18.445) * 0.27;
       const gapW = 0.0012 + 0.0045 * gauss(lat - T.hawksbill[0], 0.0028); // the gap softens the scarp
       const inDeltaLat = S((lat - 18.441) / 0.0025);
-      const delta = inDeltaLat * (85 * S((lonFront - lon) / gapW) + 60 * clamp((lonFront - lon) / 0.07, 0, 1));
-      // western rim, notched by Neretva Vallis
-      const notch = 1 - 0.7 * gauss(lat - T.neretva[0], 0.006);
-      const rim = 540 * notch * S((77.338 - lon) / 0.0068) + 70 * gauss(kmTo([lat, lon], T.lookout), 0.6);
+      const delta = inDeltaLat * (50 * S((lonFront - lon) / gapW) + 200 * clamp((lonFront - lon) / 0.1, 0, 1));
+      // western rim: crest line runs slightly north east, notched by Neretva Vallis
+      const rimLon = 77.291 - (lat - 18.47) * 0.3;
+      const notch = 1 - 0.6 * gauss(lat - T.neretva[0], 0.006);
+      const rim = 560 * notch * S((rimLon - lon) / 0.007);
       // Kodiak butte and Belva crater
       const kodiak = 55 * S((0.32 - kmTo([lat, lon], T.kodiak)) / 0.05);
       const db = kmTo([lat, lon], T.belva);

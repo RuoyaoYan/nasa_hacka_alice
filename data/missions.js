@@ -15,31 +15,33 @@
  *   life support : 1.5 % per km, plus 0.5 % per 20 m climbed, plus 2 % per target
  */
 (() => {
+  // Positions marked "sol N" are where Perseverance actually was on that sol
+  // (NASA/JPL M20 waypoints). Others are estimates, noted on each line.
   const P = {
-    habitat:    [18.4385, 77.4462],
-    landing:    [18.4446, 77.4509], // Octavia E. Butler Landing, exact (NASA/JPL, Wikipedia)
-    seitah:     [18.4262, 77.4208],
-    seitahWest: [18.4292, 77.4098],
-    kodiak:     [18.4318, 77.3905],
-    threeForks: [18.4522, 77.4012],
-    hawksbill:  [18.4642, 77.3992],
-    enchanted:  [18.4598, 77.3918],
-    upperFan:   [18.4740, 77.3900],
-    isoHill:    [18.4752, 77.3648],
-    belva:      [18.4800, 77.3800], // Belva crater centre, 0.9 km wide (USGS Gazetteer of Planetary Nomenclature)
-    fanLobe:    [18.4968, 77.3528],
-    neretva:    [18.4985, 77.3365],
-    rimSlope:   [18.4602, 77.3168],
-    lookout:    [18.4705, 77.3018],
-    rimSouth:   [18.4545, 77.3052],
-    // sightseeing viewpoints
-    belvaRim:   [18.4800, 77.3718], // Echo Creek, on Belva's west rim (where the sol 772 mosaic was taken)
-    kodiakView: [18.4338, 77.4002],
-    seitahSouth:[18.4120, 77.4195],
-    neretvaView:[18.5085, 77.3455],
-    rimSkyline: [18.4285, 77.3555],
+    habitat:    [18.4425, 77.4480], // 400 m south west of the landing site
+    landing:    [18.4446, 77.4509], // Octavia E. Butler Landing, sol 13 waypoint 18.44463, 77.45089
+    vanZyl:     [18.4448, 77.4521], // Van Zyl Overlook, sol 52 (Kodiak photographed from here, sols 57 and 63)
+    seitah:     [18.4340, 77.4430], // South Séítah, Brac outcrop, sol 248
+    seitahWest: [18.4327, 77.4414], // Séítah sand among the ripples, sol 286
+    seitahSouth:[18.4332, 77.4418], // South Séítah panorama spot, sols 200 to 210
+    kodiak:     [18.4430, 77.4120], // estimate: about 2.2 km west of Van Zyl Overlook, south of the delta front
+    threeForks: [18.4528, 77.4082], // Three Forks depot, sols 654 to 686
+    hawksbill:  [18.4580, 77.4070], // Hawksbill Gap ascent, sols 441 to 464
+    enchanted:  [18.4498, 77.4031], // Enchanted Lake, sols 415 to 428
+    deltaView:  [18.4571, 77.4218], // delta front panorama, sol 405
+    belva:      [18.4805, 77.3775], // Belva crater centre: USGS gazetteer 18.48, 77.38, refined so Echo Creek sits on the rim
+    belvaRim:   [18.4810, 77.3692], // Echo Creek on Belva's west rim, sols 765 to 775
+    upperFan:   [18.4814, 77.3658], // upper fan boulder field (Mount Julian), sols 843 to 848
+    isoHill:    [18.4752, 77.3648], // estimate
+    fanLobe:    [18.4954, 77.3466], // northern fan, sol 1000
+    neretva:    [18.4907, 77.3135], // Neretva Vallis channel, sols 1150 to 1156
+    neretvaView:[18.4941, 77.3140], // Mount Washburn above the channel, sol 1162
+    rimSlope:   [18.4703, 77.2947], // rim climb, sol 1295
+    lookout:    [18.4575, 77.2685], // Lookout Hill on the rim crest, sol 1354
+    rimSouth:   [18.4796, 77.2993], // Dox Castle at the foot of the rim, sols 1250 to 1288
+    rimSkyline: [18.4285, 77.3555], // estimate: open floor with the whole rim in view
     // other landing sites
-    forksPlain: [18.4488, 77.4085],
+    forksPlain: [18.4500, 77.4140],
     fanCamp:    [18.4875, 77.3925],
     floorSouth: [18.3985, 77.4380]
   };
@@ -69,7 +71,7 @@
     // Hazards for the cost map (approximate, for gameplay)
     hazards: {
       sand: [
-        { pos: [18.4262, 77.4185], rx: 1.5, ry: 0.75 },   // Séítah ripple field
+        { pos: [18.4300, 77.4330], rx: 1.4, ry: 0.7 },    // Séítah ripple field
         { pos: [18.4515, 77.3395], rx: 0.9, ry: 1.4 },    // sand sheet at the foot of the rim
         { pos: [18.4440, 77.3700], rx: 0.8, ry: 0.5 },
         { pos: [18.4060, 77.4120], rx: 1.2, ry: 0.6 },    // South Séítah dunes
@@ -109,11 +111,11 @@
       { id: "fl", pos: P.fanLobe, type: sample, name: "Northern fan lobe", points: 80, minutes: 30, detail: "Coarse river sediment near the old channel." },
       { id: "nv", pos: P.neretva, type: photo, name: "Neretva Vallis inlet", points: 120, minutes: 25, detail: "The river channel that once filled the lake." },
       { id: "lh", pos: P.lookout, type: sample, name: "Rim rock at Lookout Hill", points: 600, minutes: 60, detail: "Ancient crust lifted by the impact, with views out over Nili Planum." },
-      { id: "rs", pos: P.rimSlope, type: measure, name: "Radiation on the rim slope", points: 80, minutes: 30, detail: "Compare the dose on open slopes with the crater floor." },
-      { id: "sr", pos: P.rimSouth, type: sample, name: "Southern rim outcrop", points: 100, minutes: 35, detail: "Altered rock that may record ancient hot springs." },
+      { id: "rs", pos: P.rimSlope, type: measure, name: "Radiation on the rim slope", points: 80, minutes: 30, detail: "Halfway up the 780 m climb to the rim. Compare the dose on open slopes with the crater floor." },
+      { id: "sr", pos: P.rimSouth, type: sample, name: "Dox Castle outcrop", points: 100, minutes: 35, detail: "Rim rock at the start of the climb that may record ancient hot springs." },
       // Sightseeing: drive to a viewpoint, take photos, and leave them for the next crew
       { id: "vb", pos: P.belvaRim, type: sightsee, group: "sight", name: "Belva crater panorama", points: 90, minutes: 25, detail: "Stand on Echo Creek, where Perseverance took its 152 image mosaic, and look across the 900 m crater." },
-      { id: "vk", pos: P.kodiakView, type: sightsee, group: "sight", name: "Kodiak at sunrise", points: 60, minutes: 20, detail: "Early light picks out the layers in the butte. Photograph it before the shadows go." },
+      { id: "vk", pos: P.vanZyl, type: sightsee, group: "sight", name: "Kodiak from Van Zyl Overlook", points: 60, minutes: 20, detail: "Perseverance shot Kodiak from this rise at 8:15 in the morning, when low sun picks out the layers. Repeat the shot." },
       { id: "vs", pos: P.seitahSouth, type: sightsee, group: "sight", name: "South Séítah ridges", points: 70, minutes: 20, detail: "Rocky ridges rising out of the dunes, some of the oldest rock in the crater." },
       { id: "vn", pos: P.neretvaView, type: sightsee, group: "sight", name: "Neretva Vallis overlook", points: 110, minutes: 30, detail: "Look down the dry river channel that once filled Jezero's lake." },
       { id: "vr", pos: P.rimSkyline, type: sightsee, group: "sight", name: "Jezero rim skyline", points: 50, minutes: 15, detail: "The whole western rim in one frame, 300 m high and 20 km long." }
@@ -135,13 +137,13 @@
       fl: { pia: "PIA25212", url: "photojournal/pia/pia25/pia25212/PIA25212.jpg", caption: "Jezero delta layers, Mastcam-Z, sol 406" },
       nv: { pia: "PIA26335", url: "photojournal/pia/pia26/pia26335/PIA26335.jpg", caption: "Neretva Vallis river channel, Mastcam-Z, sol 1152" },
       lh: { pia: "PIA26511", url: "photojournal/pia/pia26/pia26511/PIA26511.jpg", caption: "First view over the rim from Lookout Hill, Navcam, sol 1354", credit: "NASA/JPL-Caltech" },
-      rs: { pia: "PIA26373", url: "photojournal/pia/pia26/pia26373/PIA26373.jpg", caption: "The climb up Jezero's rim, Mastcam-Z, sol 1233" },
+      rs: { pia: "PIA24264", url: "mars/resources/detail_files/2/5/25643_PIA24264-Panorama_supplement-crater-rim.jpg", caption: "Jezero's rim from the crater floor, Mastcam-Z, sol 2" },
       vb: { pia: "PIA25889", url: "mars/resources/detail_files/2/7/27471_PIA25889-web.jpg", caption: "Belva crater from Echo Creek, Mastcam-Z, sol 772" },
-      vk: { pia: "PIA24802", url: "mars/resources/detail_files/2/6/26413_Sol0057_zcam08103_Z110_R0E_web.jpg", caption: "Kodiak butte, Mastcam-Z, sol 57" },
+      vk: { pia: "PIA24802", url: "mars/resources/detail_files/2/6/26413_Sol0057_zcam08103_Z110_R0E_web.jpg", caption: "Kodiak from Van Zyl Overlook, Mastcam-Z, sol 57" },
       vs: { pia: "PIA24816", url: "mars/internal_resources/1155.jpeg", caption: "South Séítah ridges, Mastcam-Z, sol 210" },
       vn: { pia: "PIA26335", url: "photojournal/pia/pia26/pia26335/PIA26335.jpg", caption: "Looking down Neretva Vallis, Mastcam-Z, sol 1152" },
       vr: { pia: "PIA24264", url: "mars/resources/detail_files/2/5/25643_PIA24264-Panorama_supplement-crater-rim.jpg", caption: "Jezero's rim from the crater floor, Mastcam-Z, sol 2" },
-      sr: { pia: "PIA24264", url: "mars/resources/detail_files/2/5/25643_PIA24264-Panorama_supplement-crater-rim.jpg", caption: "Jezero crater rim, Mastcam-Z, sol 2" }
+      sr: { pia: "PIA26373", url: "photojournal/pia/pia26/pia26373/PIA26373.jpg", caption: "Looking up toward Dox Castle and the rim, Mastcam-Z, sol 1233" }
     },
 
     // Filled in from the tasks you pick on the task page
