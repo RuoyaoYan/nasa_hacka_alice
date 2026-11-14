@@ -71,55 +71,49 @@
       easiest: { label: "Easiest", note: "Least climbing and soft sand, even if a little longer", color: "#8A4FE0", maxSlope: 9, steep: 14, sand: 9, rock: Infinity, bonus: false }
     },
 
+    // Every task the crew can pick today. "today: true" marks the five everyday
+    // choices shown first; the others sit farther out.
+    tasks: [
+      { id: "hg", pos: P.hawksbill, type: sample, name: "Clay sample at Hawksbill Gap", points: 300, minutes: 45, today: true, detail: "CRISM shows clay minerals in these delta layers. Clay forms in water, so it tells us how long the lake lasted." },
+      { id: "tf", pos: P.threeForks, type: photo, name: "Three Forks sample depot", points: 60, minutes: 20, today: true, detail: "Photograph the ten tubes Perseverance cached in 2022 and 2023 and check none are buried by dust." },
+      { id: "se", pos: P.seitah, type: measure, name: "Wind reading in Séítah", points: 70, minutes: 30, today: true, detail: "Set up the anemometer on a ripple crest to see how fast the sand is moving." },
+      { id: "ls", pos: P.landing, type: photo, name: "Landing site survey", points: 40, minutes: 15, today: true, detail: "Document Octavia E. Butler Landing and any debris the wind has moved since 2021." },
+      { id: "el", pos: P.enchanted, type: sample, name: "Enchanted Lake mudstone", points: 90, minutes: 35, today: true, detail: "Fine grained lake sediment at the very bottom of the delta." },
+      { id: "ko", pos: P.kodiak, type: photo, name: "Kodiak butte layers", points: 90, minutes: 25, detail: "A flat topped remnant of the delta, standing alone on the crater floor." },
+      { id: "sw", pos: P.seitahWest, type: sample, name: "Séítah sand sample", points: 80, minutes: 30, detail: "Wind blown sand from the ripple field." },
+      { id: "bv", pos: P.belva, type: sample, name: "Belva crater wall sample", points: 450, minutes: 50, detail: "The impact exposed river laid layers in the crater wall, like a road cut on Earth." },
+      { id: "uf", pos: P.upperFan, type: photo, name: "Upper fan boulders", points: 70, minutes: 20, detail: "Boulders carried in by a late, high energy flood." },
+      { id: "ih", pos: P.isoHill, type: photo, name: "Isolated hill layers", points: 80, minutes: 20, detail: "Stacked river layers formed by a deep, fast river." },
+      { id: "fl", pos: P.fanLobe, type: sample, name: "Northern fan lobe", points: 80, minutes: 30, detail: "Coarse river sediment near the old channel." },
+      { id: "nv", pos: P.neretva, type: photo, name: "Neretva Vallis inlet", points: 120, minutes: 25, detail: "The river channel that once filled the lake." },
+      { id: "lh", pos: P.lookout, type: sample, name: "Rim rock at Lookout Hill", points: 600, minutes: 60, detail: "Ancient crust lifted by the impact, with views out over Nili Planum." },
+      { id: "rs", pos: P.rimSlope, type: measure, name: "Radiation on the rim slope", points: 80, minutes: 30, detail: "Compare the dose on open slopes with the crater floor." },
+      { id: "sr", pos: P.rimSouth, type: sample, name: "Southern rim outcrop", points: 100, minutes: 35, detail: "Altered rock that may record ancient hot springs." }
+    ],
+
+    // Real Perseverance photos of the same place (or the nearest one it imaged).
+    // Loaded from NASA when the game runs; each falls back to a HiRISE view.
+    photos: {
+      hg: { pia: "PIA25212", url: "photojournal/pia/pia25/pia25212/PIA25212.jpg", caption: "Delta front east of Hawksbill Gap, Mastcam-Z, sol 406" },
+      tf: { pia: "PIA25736", url: "mars/resources/detail_files/2/7/27307_27307_PIA25736-web1.jpg", caption: "The Three Forks sample depot, Mastcam-Z, sol 693" },
+      se: { pia: "PIA25023", url: "mars/resources/detail_files/2/6/26437_PIA25023-web.jpg", caption: "Rock outcrop in Séítah, Mastcam-Z, sol 237" },
+      ls: { pia: "PIA23727", url: "photojournal/pia/pia23/pia23727/PIA23727.jpg", caption: "View from the landing site, Mastcam-Z, sol 4" },
+      el: { pia: "Sol 424", url: "mars/mars2020-raw-images/pub/ods/surface/sol/00424/ids/edr/browse/zcam/ZR0_0424_0704571095_818EBY_N0240000ZCAM08445_1100LMJ01_1200.jpg", caption: "Rocks at Enchanted Lake, Mastcam-Z raw image, sol 424", raw: true, credit: "NASA/JPL-Caltech/ASU" },
+      ko: { pia: "PIA24802", url: "mars/resources/detail_files/2/6/26413_Sol0057_zcam08103_Z110_R0E_web.jpg", caption: "Kodiak butte, Mastcam-Z, sol 57" },
+      sw: { pia: "PIA24816", url: "mars/internal_resources/1155.jpeg", caption: "Ridges and ripples of South Séítah, Mastcam-Z, sol 210" },
+      bv: { pia: "PIA25889", url: "mars/resources/detail_files/2/7/27471_PIA25889-web.jpg", caption: "Inside Belva crater, Mastcam-Z, sol 772" },
+      uf: { pia: "PIA25963", url: "mars/resources/detail_files/2/7/27574_PIA25963-web.jpg", caption: "Boulder field on the upper fan, Mastcam-Z, sol 845" },
+      ih: { pia: "PIA25965", url: "mars/resources/detail_files/2/7/27664_PIA25965-NaturalLight-web.jpg", caption: "Looking west across the upper fan, Mastcam-Z, sol 847" },
+      fl: { pia: "PIA25212", url: "photojournal/pia/pia25/pia25212/PIA25212.jpg", caption: "Jezero delta layers, Mastcam-Z, sol 406" },
+      nv: { pia: "PIA26335", url: "photojournal/pia/pia26/pia26335/PIA26335.jpg", caption: "Neretva Vallis river channel, Mastcam-Z, sol 1152" },
+      lh: { pia: "PIA26511", url: "photojournal/pia/pia26/pia26511/PIA26511.jpg", caption: "First view over the rim from Lookout Hill, Navcam, sol 1354", credit: "NASA/JPL-Caltech" },
+      rs: { pia: "PIA26373", url: "photojournal/pia/pia26/pia26373/PIA26373.jpg", caption: "The climb up Jezero's rim, Mastcam-Z, sol 1233" },
+      sr: { pia: "PIA24264", url: "mars/resources/detail_files/2/5/25643_PIA24264-Panorama_supplement-crater-rim.jpg", caption: "Jezero crater rim, Mastcam-Z, sol 2" }
+    },
+
+    // Filled in from the tasks you pick on the task page
     missions: [
-      {
-        id: "delta-front",
-        name: "Delta front survey",
-        goal: "Five tasks along the foot of the ancient river delta: sample clay, photograph the layers and measure the wind. Clay forms in water, so it tells us how long Jezero's lake lasted.",
-        difficulty: 1,
-        weather: [{ type: "dust", at: 0.62 }],
-        objectives: [
-          { id: "hg", pos: P.hawksbill, type: sample, name: "Clay sample at Hawksbill Gap", points: 300, minutes: 45, photo: "delta", detail: "CRISM shows clay minerals in these layers.", main: true },
-          { id: "tf", pos: P.threeForks, type: photo, name: "Three Forks sample depot", points: 60, minutes: 20, photo: "rim", detail: "Photograph the ten tubes Perseverance cached in 2022 and 2023." },
-          { id: "el", pos: P.enchanted, type: photo, name: "Enchanted Lake panorama", points: 80, minutes: 25, photo: "delta", detail: "Where Perseverance first saw sedimentary rocks up close." },
-          { id: "se", pos: P.seitah, type: measure, name: "Wind reading in Séítah", points: 70, minutes: 30, photo: "dunes", detail: "Set up the anemometer on a ripple crest." },
-          { id: "ls", pos: P.landing, type: photo, name: "Landing site survey", points: 40, minutes: 15, photo: "rim", detail: "Document Perseverance's landing site and any blown debris." },
-          { id: "ko", pos: P.kodiak, type: photo, name: "Kodiak butte layers", points: 90, minutes: 25, photo: "rim", detail: "A flat topped remnant of the delta.", optional: true },
-          { id: "sw", pos: P.seitahWest, type: sample, name: "Séítah sand sample", points: 80, minutes: 30, photo: "dunes", detail: "Wind blown sand from the ripple field.", optional: true }
-        ]
-      },
-      {
-        id: "belva",
-        name: "Upper fan and Belva crater",
-        goal: "Climb onto the delta's upper fan. Sample the layers exposed in Belva crater and photograph the boulders a late flood carried in.",
-        difficulty: 2,
-        weather: [{ type: "radiation", at: 0.45 }],
-        objectives: [
-          { id: "bv", pos: P.belva, type: sample, name: "Belva crater wall sample", points: 450, minutes: 50, photo: "rim", detail: "The impact exposed river laid layers in the crater wall.", main: true },
-          { id: "hg", pos: P.hawksbill, type: photo, name: "Hawksbill Gap valley", points: 60, minutes: 15, photo: "delta", detail: "The valley where Perseverance first drove onto the delta." },
-          { id: "tf", pos: P.threeForks, type: measure, name: "Depot tube inventory", points: 60, minutes: 25, photo: "rim", detail: "Check the seals on the cached sample tubes." },
-          { id: "el", pos: P.enchanted, type: sample, name: "Enchanted Lake mudstone", points: 90, minutes: 35, photo: "delta", detail: "Fine grained lake sediment." },
-          { id: "uf", pos: P.upperFan, type: photo, name: "Upper fan boulders", points: 70, minutes: 20, photo: "rim", detail: "Boulders carried in by a late, high energy flood." },
-          { id: "ih", pos: P.isoHill, type: photo, name: "Isolated hill", points: 80, minutes: 20, photo: "rim", detail: "Stacked river layers formed by a deep, fast river.", optional: true },
-          { id: "fl", pos: P.fanLobe, type: sample, name: "Northern fan lobe", points: 80, minutes: 30, photo: "delta", detail: "Coarse river sediment near the old channel.", optional: true }
-        ]
-      },
-      {
-        id: "rim",
-        name: "Crater rim expedition",
-        goal: "A full day traverse to Jezero's western rim. The rim exposes rock from deep inside Mars, thrown up by the impact 3.9 billion years ago.",
-        difficulty: 3,
-        weather: [{ type: "radiation", at: 0.4 }, { type: "dust", at: 0.74 }],
-        objectives: [
-          { id: "lh", pos: P.lookout, type: sample, name: "Rim rock at Lookout Hill", points: 600, minutes: 60, photo: "rim", detail: "Ancient crust lifted by the impact. Views out over Nili Planum.", main: true },
-          { id: "nv", pos: P.neretva, type: photo, name: "Neretva Vallis inlet", points: 120, minutes: 25, photo: "delta", detail: "The river channel that once filled the lake." },
-          { id: "bv", pos: P.belva, type: sample, name: "Belva crater", points: 120, minutes: 40, photo: "rim", detail: "Delta layers exposed in the crater wall." },
-          { id: "rs", pos: P.rimSlope, type: measure, name: "Radiation on the rim slope", points: 80, minutes: 30, photo: "rim", detail: "Compare dose on open slopes with the crater floor." },
-          { id: "ko", pos: P.kodiak, type: photo, name: "Kodiak butte", points: 90, minutes: 20, photo: "rim", detail: "A last remnant of the delta, standing alone." },
-          { id: "sr", pos: P.rimSouth, type: sample, name: "Southern rim outcrop", points: 100, minutes: 35, photo: "rim", detail: "Altered rock that may record ancient hot springs.", optional: true },
-          { id: "se", pos: P.seitah, type: measure, name: "Wind reading in Séítah", points: 70, minutes: 30, photo: "dunes", detail: "Wind data on the way home.", optional: true }
-        ]
-      }
+      { id: "today", name: "Today's EVA", goal: "", difficulty: 1, weather: [{ type: "dust", at: 0.62 }], objectives: [] }
     ],
 
     // Events replay the kind of conditions NASA rovers have recorded.

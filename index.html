@@ -11,7 +11,7 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23C2410C'/%3E%3Cpath d='M6 22 L13 12 L18 18 L21 14 L26 22Z' fill='%23fff'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
   <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css">
-  <link rel="stylesheet" href="style.css?v=20261114i">
+  <link rel="stylesheet" href="style.css?v=20261114j">
 </head>
 <body data-screen="intro">
   <a class="skip-link button-sm" href="#side">Skip to mission details</a>
@@ -29,25 +29,46 @@
     <button class="btn btn-ghost button-sm" id="btn-sources" type="button"><i class="ph ph-database" aria-hidden="true"></i>NASA data</button>
   </header>
 
+  <!-- ================= Task page ================= -->
+  <main class="tasks-page" id="tasks" aria-labelledby="tasks-title" hidden>
+    <div class="tasks-inner">
+      <header class="tasks-head">
+        <p class="caption-3 overline">Jezero crater · Sol <span id="tasks-sol">23</span> · Habitat briefing</p>
+        <h1 class="heading-3" id="tasks-title">What do you want to do today?</h1>
+        <p class="body-3 muted" id="tasks-sub">Pick one or more tasks. When you confirm, the planner works out the best order and three routes to get there and back safely.</p>
+      </header>
+      <ul class="task-grid" id="task-today" aria-label="Today's tasks"></ul>
+      <div class="tasks-more">
+        <button class="btn btn-ghost button-sm" id="btn-more-tasks" type="button" aria-expanded="false" aria-controls="task-far"><i class="ph ph-caret-down" aria-hidden="true"></i><span>Show tasks farther away</span></button>
+        <ul class="task-grid" id="task-far" aria-label="Tasks farther away" hidden></ul>
+      </div>
+    </div>
+    <div class="tasks-bar">
+      <div class="tasks-bar-in">
+        <p class="body-5" id="tasks-summary" role="status">No tasks picked yet.</p>
+        <div class="tasks-actions">
+          <button class="btn btn-ghost button-md" id="btn-tasks-cancel" type="button" hidden>Keep my route</button>
+          <button class="btn btn-primary button-md" id="btn-tasks-go" type="button" disabled>Confirm and plan my route <kbd class="key">Enter</kbd></button>
+        </div>
+      </div>
+    </div>
+  </main>
+
   <div class="app">
     <!-- ================= Left column ================= -->
     <aside class="side" id="side" tabindex="-1" aria-label="Mission details">
 
       <!-- PLAN -->
       <div class="plan-only side-scroll">
-        <nav class="tabs" id="mission-tabs" role="tablist" aria-label="Today's missions"></nav>
-
         <section class="block">
-          <p class="caption-3 overline">Jezero crater · Sol <span id="sol-inline">23</span></p>
+          <div class="row-between">
+            <p class="caption-3 overline">Jezero crater · Sol <span id="sol-inline">23</span></p>
+            <button class="btn btn-ghost button-sm" id="btn-change" type="button"><i class="ph ph-arrows-clockwise" aria-hidden="true"></i>Change your mind?</button>
+          </div>
           <h1 class="heading-4" id="m-name"></h1>
           <p class="body-3 muted" id="m-goal"></p>
           <ul class="meta" id="m-meta"></ul>
-        </section>
-
-        <section class="block" aria-labelledby="obj-title-plan">
-          <h2 class="heading-6" id="obj-title-plan">Targets</h2>
-          <p class="body-6 muted">Tick what the crew should do on this tour. The planner finds the shortest safe order to visit them.</p>
-          <ul class="obj-list" id="obj-select"></ul>
+          <ul class="task-chips" id="obj-select" aria-label="Today's tasks"></ul>
         </section>
 
         <section class="block" aria-labelledby="routes-title">
@@ -209,9 +230,9 @@
     <div class="modal intro">
       <p class="caption-3 overline">NASA Space Apps 2026 · Martian Map</p>
       <h1 class="heading-3" id="intro-title">Plan your first<br>Marswalk in Jezero</h1>
-      <p class="body-3 muted">Momoot is a route planner for astronauts on Mars. The map is real NASA orbiter imagery, down to 25 cm per pixel. Pick today's science tour, compare routes, then drive it in the crew rover and walk out at every stop. Conditions on Mars change, so be ready to adapt.</p>
+      <p class="body-3 muted">Momoot is a route planner for astronauts on Mars. The map is real NASA orbiter imagery, down to 25 cm per pixel. Pick today's tasks, let the planner find the best route, then drive it in the crew rover and walk out at every stop. Conditions on Mars change, so be ready to adapt.</p>
       <ol class="intro-steps body-5">
-        <li><i class="ph ph-flag-banner" aria-hidden="true"></i>Pick a mission</li>
+        <li><i class="ph ph-flag-banner" aria-hidden="true"></i>Pick today's tasks</li>
         <li><i class="ph ph-path" aria-hidden="true"></i>Choose a route</li>
         <li><i class="ph ph-person-simple-walk" aria-hidden="true"></i>Drive, walk and react</li>
       </ol>
@@ -306,10 +327,10 @@
     if (b) { b.hidden = false; b.querySelector("code").textContent = e.message + " (" + (e.filename || "").split("/").pop() + ":" + e.lineno + ")"; }
   });
   </script>
-  <script src="data/missions.js?v=20261114i"></script>
-  <script src="marsmap.js?v=20261114i"></script>
-  <script src="planner.js?v=20261114i"></script>
-  <script src="hazardscan.js?v=20261114i"></script>
-  <script src="app.js?v=20261114i"></script>
+  <script src="data/missions.js?v=20261114j"></script>
+  <script src="marsmap.js?v=20261114j"></script>
+  <script src="planner.js?v=20261114j"></script>
+  <script src="hazardscan.js?v=20261114j"></script>
+  <script src="app.js?v=20261114j"></script>
 </body>
 </html>

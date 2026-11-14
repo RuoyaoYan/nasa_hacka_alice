@@ -418,3 +418,49 @@ body:not([data-screen="eva"]):not([data-screen="event"]):not([data-screen="end"]
 .elev-stats dd { white-space: nowrap; font-size: 18px; }
 .pin.photo .pin-label { display: none; }
 .pin.photo:hover .pin-label, .pin.photo:focus-visible .pin-label { display: block; z-index: 3; }
+
+/* ---------- Scroll fix: the inactive panel must not sit on top and swallow the wheel ---------- */
+.side-scroll { overscroll-behavior: contain; visibility: visible; transition: opacity var(--t-move) var(--ease), transform var(--t-move) var(--ease), visibility 0s linear 0s; }
+body:not([data-screen="plan"]):not([data-screen="intro"]):not([data-screen="tasks"]) .plan-only,
+body:not([data-screen="eva"]):not([data-screen="event"]):not([data-screen="end"]) .eva-only { visibility: hidden; transition: opacity var(--t-move) var(--ease), transform var(--t-move) var(--ease), visibility 0s linear var(--t-move); }
+.side-scroll > :last-child { margin-bottom: var(--s-300); }
+
+/* ---------- Task page ---------- */
+.tasks-page { position: fixed; top: var(--nav-h); left: 0; right: 0; bottom: 0; z-index: 20; background: var(--bg); overflow: auto; overscroll-behavior: contain; display: flex; flex-direction: column; }
+.tasks-page[hidden] { display: none; }
+.tasks-inner { width: 100%; max-width: 1240px; margin: 0 auto; padding: var(--s-400) var(--s-300) var(--s-300); flex: 1; }
+.tasks-head { max-width: 720px; margin-bottom: var(--s-300); }
+.tasks-head > * + * { margin-top: var(--s-75); }
+.task-grid { list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--s-200); }
+.task-grid + .tasks-more, .tasks-more { margin-top: var(--s-300); }
+.tasks-more .task-grid { margin-top: var(--s-200); }
+.task { position: relative; height: 100%; }
+.task input { position: absolute; opacity: 0; pointer-events: none; }
+.task label { display: flex; flex-direction: column; height: 100%; background: var(--surface); border: 1px solid var(--line); cursor: pointer; transition: border-color var(--t-color) var(--ease), box-shadow var(--t-color) var(--ease), transform var(--t-move) var(--ease); }
+.task label:hover { border-color: var(--line-strong); transform: translateY(-2px); }
+.task input:focus-visible + label { outline: 2px solid var(--accent); outline-offset: 2px; }
+.task input:checked + label { border-color: var(--accent); box-shadow: inset 0 0 0 2px var(--accent); }
+.task .t-img { position: relative; height: 140px; background: var(--surface-2); overflow: hidden; }
+.task .t-img img, .task .t-img svg { width: 100%; height: 100%; object-fit: cover; display: block; }
+.task .t-check { position: absolute; top: var(--s-100); right: var(--s-100); width: 28px; height: 28px; display: grid; place-items: center; background: rgba(255,255,255,0.92); border: 1px solid var(--line-strong); color: transparent; font-size: 16px; }
+.task input:checked + label .t-check { background: var(--accent); border-color: var(--accent); color: #FFFFFF; }
+.task .t-type { position: absolute; left: var(--s-100); top: var(--s-100); display: inline-flex; align-items: center; gap: var(--s-50); padding: 2px var(--s-75); background: rgba(29,28,26,0.82); color: #FFFFFF; }
+.task .t-body { padding: var(--s-100) var(--s-200); display: flex; flex-direction: column; gap: var(--s-50); flex: 1; }
+.task .t-meta { display: flex; flex-wrap: wrap; gap: var(--s-50) var(--s-100); margin-top: auto; padding-top: var(--s-100); color: var(--text-2); }
+.task .t-meta strong { color: var(--text); font-weight: 600; }
+.task .t-credit { color: var(--text-2); font-size: 11px; line-height: 14px; padding: 0 var(--s-200) var(--s-100); }
+.dist-near { color: #2E7D46 !important; } .dist-mid { color: #A86400 !important; } .dist-far { color: #B3261E !important; }
+.tasks-bar { position: sticky; bottom: 0; background: var(--surface); border-top: 1px solid var(--line-strong); box-shadow: 0 -8px 24px rgba(0,0,0,0.06); }
+.tasks-bar-in { max-width: 1240px; margin: 0 auto; padding: var(--s-200) var(--s-300); display: flex; align-items: center; justify-content: space-between; gap: var(--s-200); flex-wrap: wrap; }
+.tasks-actions { display: flex; gap: var(--s-100); }
+#btn-tasks-go[disabled] { opacity: 0.45; cursor: not-allowed; }
+.task-chips { list-style: none; display: flex; flex-wrap: wrap; gap: var(--s-75); margin-top: var(--s-100) !important; }
+.task-chips li { display: inline-flex; align-items: center; gap: var(--s-50); padding: var(--s-25, 2px) var(--s-100); background: var(--surface); border: 1px solid var(--line); }
+.task-chips li.main { border-color: var(--accent); }
+.photo-credit { display: block; font-size: 11px; line-height: 14px; color: var(--text-2); margin-top: var(--s-50); }
+@media (max-width: 900px) {
+  .tasks-page { position: fixed; }
+  .task-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+}
+.btn[hidden], .task-grid[hidden] { display: none !important; }
+.task .t-imgbox { position: relative; }

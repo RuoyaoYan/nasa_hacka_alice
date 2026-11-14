@@ -6,7 +6,7 @@
 
   const D = window.MOMOOT_DATA;
   // Start planning must always close the intro, even if something below fails
-  document.getElementById("btn-intro").addEventListener("click", () => { document.getElementById("intro").hidden = true; document.body.dataset.screen = "plan"; });
+  document.getElementById("btn-intro").addEventListener("click", () => { document.getElementById("intro").hidden = true; document.getElementById("tasks").hidden = false; document.body.dataset.screen = "tasks"; });
   const MarsMap = window.MarsMap;
   const SVGNS = "http://www.w3.org/2000/svg";
   const $ = (sel) => document.querySelector(sel);
@@ -57,8 +57,10 @@
   // pair of targets, and a depth first search over visiting orders.
   const Planner = window.MomootPlanner;
   const TYPE = { sample: { label: "Sample", icon: "ph-flask" }, photo: { label: "Photo", icon: "ph-camera" }, measure: { label: "Measure", icon: "ph-gauge" } };
-  state.selected = {};
-  for (const m of D.missions) state.selected[m.id] = new Set(m.objectives.filter((o) => !o.optional).map((o) => o.id));
+  const TODAY = D.missions[0];
+  TODAY.objectives = D.tasks;
+  state.selected = { [TODAY.id]: new Set(D.tasks.filter((t) => t.today).slice(0, 3).map((t) => t.id)) };
+  const habKm = (t) => MarsMap.distanceKm(D.habitat.pos, t.pos);
 
   function measureLine(r) {
     r.cum = [0];
@@ -69,7 +71,9 @@
   function planMission(m) {
     const sel = state.selected[m.id];
     m.routes = Object.entries(D.profiles).map(([id, W]) => {
-      const targets = m.objectives.filter((o) => sel.has(o.id));
+      const picked = m.objectives.filter((o) => sel.has(o.id));
+      const topId = picked.reduce((b, o) => (!b || o.points > b.points ? o : b), null).id;
+      const targets = picked.map((o) => ({ ...o, main: o.id === topId }));
       const plan = Planner.plan(D, targets, W);
       const r = { id, label: W.label, note: W.note, color: W.color, plan, targets };
       r.dense = plan.line;
@@ -93,6 +97,7 @@
       if (firstRock) ev.push({ type: "rock", at: firstRock.km / r.km });
       if (firstSand) ev.push({ type: "sand", at: firstSand.km / r.km });
       for (const w of m.weather) ev.push({ ...w });
+      if (r.km > 15) ev.push({ type: "radiation", at: 0.42 });
       ev.sort((x, y) => x.at - y.at);
       r.events = ev.filter((x, i) => i === 0 || x.at - ev[i - 1].at > 0.06).slice(0, 3);
       r.risk = clamp(1 + (firstRock ? 1 : 0) + (firstSand || r.steepKm > 0.15 ? 1 : 0), 1, 3);
@@ -103,6 +108,11 @@
       r.o2Total = Math.round(r.km * RULES.o2PerKm + (r.climb / 20) * RULES.o2Per20mClimb + r.allStops.length * RULES.stopO2);
       return r;
     });
+    // describe today's tour from what was picked
+    const safest = m.routes[0], n = safest.allStops.length;
+    m.difficulty = safest.km < 12 ? 1 : safest.km < 18 ? 2 : 3;
+    const main = safest.allStops.find((s) => s.main);
+    m.goal = `${n} task${n > 1 ? "s" : ""} picked at the habitat briefing. Main task: ${main.name}. The planner tried every visiting order and kept the shortest safe loop.`;
   }
   for (const m of D.missions) planMission(m);
 
@@ -281,7 +291,7 @@
   function buildMarkers() {
     const m = mission(), r = route();
     const list = [];
-    const stopPts = [...r.allStops.map((s) => s.pos), ...m.objectives.map((o) => o.pos)];
+    const stopPts = r.allStops.map((s) => s.pos);
     for (const lm of D.landmarks) {
       if (stopPts.some((p) => MarsMap.distanceKm(p, lm.pos) < 0.05)) continue; // a stop already marks this spot
       list.push({ pos: lm.pos, el: pinEl("landmark", "", lm.name, lm.note) });
@@ -295,7 +305,7 @@
     }
     // targets not on this route: faint, click to add
     const onRoute = new Set(r.allStops.map((s) => s.id));
-    if (!state.run) {
+    if (false) {
       for (const o of m.objectives) {
         if (onRoute.has(o.id)) continue;
         const el = pinEl("off", "+", o.name, `${TYPE[o.type].label} · +${o.points} pts${o.optional ? " · optional" : ""}`);
@@ -332,7 +342,7 @@
 
   function fitRoute(all = true, ms = 700) {
     const m = mission();
-    const pts = [D.habitat.pos, ...m.objectives.map((o) => o.pos), ...(all ? m.routes.flatMap((r) => r.dense) : route().dense)];
+    const pts = [D.habitat.pos, ...(all ? m.routes.flatMap((r) => r.dense) : route().dense)];
     const v = map.fitBounds(pts, 90, 16.5);
     map.flyTo(v.lat, v.lon, v.zoom, ms);
   }
@@ -412,14 +422,6 @@
   }
 
   // ---------- Plan column ----------
-  function renderTabs() {
-    const nav = $("#mission-tabs"); nav.innerHTML = "";
-    D.missions.forEach((m, i) => {
-      const b = html("button", { class: "tab title-4", type: "button", role: "tab", "aria-selected": String(i === state.missionIdx) }, m.name);
-      b.addEventListener("click", () => selectMission(i));
-      nav.append(b);
-    });
-  }
 
   function renderPlan() {
     const m = mission(), r = route();
@@ -686,17 +688,10 @@
   // Target picker and planner stats
   function renderObjectives(m, r) {
     const ul = $("#obj-select"); ul.innerHTML = "";
-    const sel = state.selected[m.id];
-    for (const o of m.objectives) {
-      const li = html("li");
-      const lab = html("label", { class: "obj body-6" });
-      const cb = html("input", { type: "checkbox" }); cb.checked = sel.has(o.id);
-      cb.addEventListener("change", () => toggleObjective(o.id, cb.checked));
-      const ic = html("i", { class: `ph ${TYPE[o.type].icon}`, "aria-hidden": "true" });
-      const txt = html("span", { class: "obj-name" }, o.name);
-      const tag = html("span", { class: "caption-5 muted" }, `${TYPE[o.type].label} · +${o.points} pts${o.main ? " · main" : ""}${o.optional ? " · optional" : ""}`);
-      lab.append(cb, ic, txt, tag);
-      li.append(lab);
+    for (const s of r.allStops) {
+      const li = html("li", { class: `body-6${s.main ? " main" : ""}` });
+      li.innerHTML = `<i class="ph ${TYPE[s.type].icon}" aria-hidden="true"></i>`;
+      li.append(document.createTextNode(s.name + (s.main ? " · main" : "")));
       ul.append(li);
     }
     const p = r.plan;
@@ -715,7 +710,7 @@
     ol.style.setProperty("--route-color", r.color);
     const items = [{ badge: "A", cls: "", name: "Habitat", km: 0, pos: D.habitat.pos, sub: "Board the rover and head out" }];
     for (const s of r.allStops) {
-      items.push({ badge: String(s.order), cls: s.main ? "target" : "stop", name: s.name, km: s.at * r.km, pos: s.pos, sub: `${TYPE[s.type].label} · ${s.minutes} min · +${s.points} pts. ${s.detail}`, photo: s.photo });
+      items.push({ badge: String(s.order), cls: s.main ? "target" : "stop", name: s.name, km: s.at * r.km, pos: s.pos, sub: `${TYPE[s.type].label} · ${s.minutes} min · +${s.points} pts. ${s.detail}`, photo: s.id });
     }
     items.push({ badge: "A", cls: "", name: "Back at the habitat", km: r.km, pos: D.habitat.pos, sub: "Tour complete" });
     for (const it of items) {
@@ -728,16 +723,12 @@
       const go = html("button", { class: "wp-link body-5", type: "button" }, "Show on map");
       go.addEventListener("click", () => map.flyTo(it.pos[0], it.pos[1], 16.5, 700));
       body.append(go);
-      if (it.photo) { const f = html("figure", { class: "wp-photo" }); renderPhoto(f, it.photo, it.name); body.append(f); }
+      if (it.photo) { const f = html("figure", { class: "wp-photo" }); body.append(f); renderPhoto(f, it.photo, it.name); }
       li.append(body);
       ol.append(li);
     }
   }
 
-  function selectMission(i) {
-    state.missionIdx = i; state.routeIdx = 0;
-    renderTabs(); renderPlan(); buildMarkers(); drawOverlays(); fitRoute();
-  }
   function selectRoute(i) {
     state.routeIdx = i;
     renderPlan(); buildMarkers(); drawOverlays();
@@ -748,6 +739,7 @@
     state.screen = s;
     document.body.dataset.screen = s;
     $("#intro").hidden = s !== "intro";
+    $("#tasks").hidden = s !== "tasks";
     $("#event").hidden = s !== "event";
     $("#end").hidden = s !== "end";
   }
@@ -867,7 +859,7 @@
     $("#stop-kicker").textContent = `${stop.main ? "Main target" : "Target " + stop.order} · ${TYPE[stop.type].label}`;
     $("#stop-name").textContent = stop.name;
     $("#stop-detail").textContent = stop.detail;
-    renderPhoto($("#stop-photo"), stop.photo, stop.name);
+    renderPhoto($("#stop-photo"), stop.id, stop.name);
     const b = $("#btn-sample"); b.innerHTML = "";
     const verb = { sample: "Collect sample", photo: "Take photos", measure: "Take measurement" }[stop.type] || "Collect sample";
     b.append(document.createTextNode(`${verb} · +${stop.points} pts `), html("kbd", { class: "key" }, "S"));
@@ -890,11 +882,33 @@
     renderChecklist();
   }
 
-  function renderPhoto(fig, name, alt) {
+  // Real Perseverance photo from NASA; falls back to the full size file,
+  // then a HiRISE view of the exact spot, then a drawing.
+  const NASA_ASSETS = "https://assets.science.nasa.gov/";
+  function photoUrls(p) {
+    if (p.raw) return [NASA_ASSETS + "content/dam/science/psd/" + p.url];
+    return [NASA_ASSETS + "dynamicimage/assets/science/psd/" + p.url + "?w=960&fit=clip", NASA_ASSETS + "content/dam/science/psd/" + p.url];
+  }
+  function renderPhoto(fig, id, alt, withCredit = true) {
     fig.innerHTML = "";
-    const img = html("img", { src: `assets/photos/${name}.jpg`, alt: `Perseverance view of ${alt}` });
-    img.onerror = () => { fig.innerHTML = ""; fig.append(illustration(name, alt)); };
+    const p = D.photos[id], task = D.tasks.find((t) => t.id === id);
+    const fallback = () => {
+      fig.innerHTML = "";
+      fig.append(illustration(task && task.type === "measure" ? "dunes" : "rim", alt));
+      if (task) snapshot(task.pos[0], task.pos[1]).then((url) => { if (url) { fig.innerHTML = ""; fig.append(html("img", { src: url, alt: `HiRISE view of ${alt}` })); } });
+    };
+    if (!p) { fallback(); return; }
+    const urls = photoUrls(p);
+    let k = 0;
+    const img = html("img", { src: urls[0], alt: `Perseverance view: ${p.caption}`, loading: "lazy", decoding: "async" });
+    img.onerror = () => { k++; if (k < urls.length) img.src = urls[k]; else fallback(); };
     fig.append(img);
+    if (withCredit) {
+      fig.title = `${p.caption}. ${p.credit || "NASA/JPL-Caltech/ASU/MSSS"} (${p.pia})`;
+      const cap = fig.nextElementSibling && fig.nextElementSibling.classList.contains("photo-credit") ? fig.nextElementSibling : null;
+      const text = `${p.caption} · ${p.credit || "NASA/JPL-Caltech/ASU/MSSS"}`;
+      if (cap) cap.textContent = text; else fig.after(html("small", { class: "photo-credit" }, text));
+    }
   }
 
   // Drawn stand in until a real Perseverance photo is added
@@ -918,7 +932,7 @@
     svg("ellipse", { cx: 84, cy: 176, rx: 30, ry: 9, fill: "#6E3A24" }, s);
     svg("ellipse", { cx: 356, cy: 184, rx: 18, ry: 5, fill: "#6E3A24" }, s);
     const cap = svg("text", { x: 14, y: 24, "font-family": "Poppins, sans-serif", "font-size": 12, "font-weight": 500, fill: "#5C2E1B" }, s);
-    cap.textContent = "Illustration · Perseverance photo goes here";
+    cap.textContent = "Illustration · loading NASA photo";
     return s;
   }
 
@@ -1010,8 +1024,97 @@
     clearTimeout(toastT); toastT = setTimeout(() => { t.hidden = true; }, 3800);
   }
 
+  // ---------- Task page: pick what to do today ----------
+  const MAX_TASKS = 7;
+  state.draft = new Set();
+  state.planned = false;
+  function distClass(km) { return km < 2.5 ? ["dist-near", "Near"] : km < 5 ? ["dist-mid", "Medium"] : ["dist-far", "Far"]; }
+  function taskCard(t) {
+    const li = html("li", { class: "task" });
+    const id = `task-${t.id}`;
+    const cb = html("input", { type: "checkbox", id }); cb.checked = state.draft.has(t.id);
+    cb.addEventListener("change", () => {
+      if (cb.checked && state.draft.size >= MAX_TASKS) { cb.checked = false; toast(`One EVA fits at most ${MAX_TASKS} tasks. Untick one first.`); return; }
+      if (cb.checked) state.draft.add(t.id); else state.draft.delete(t.id);
+      updateTaskSummary();
+    });
+    const lab = html("label", { for: id });
+    const fig = html("figure", { class: "t-img" });
+    const box = html("div", { class: "t-imgbox" });
+    box.append(fig);
+    lab.append(box);
+    const type = html("span", { class: "t-type caption-5" }); type.innerHTML = `<i class="ph ${TYPE[t.type].icon}" aria-hidden="true"></i>`; type.append(document.createTextNode(TYPE[t.type].label));
+    const chk = html("span", { class: "t-check", "aria-hidden": "true" }); chk.innerHTML = `<i class="ph ph-check" aria-hidden="true"></i>`;
+    const km = habKm(t), [dc, dl] = distClass(km);
+    const body = html("div", { class: "t-body" });
+    const meta = html("p", { class: "t-meta caption-4" });
+    meta.innerHTML = `<span><strong>+${t.points}</strong> pts</span><span><strong>${t.minutes}</strong> min on site</span><span class="${dc}">${dl} · ${km.toFixed(1)} km</span>`;
+    body.append(html("p", { class: "title-3" }, t.name), html("p", { class: "body-6 muted" }, t.detail), meta);
+    lab.append(body);
+    li.append(cb, lab);
+    renderPhoto(fig, t.id, t.name, false);
+    box.append(type, chk);
+    const p = D.photos[t.id];
+    if (p) lab.append(html("small", { class: "t-credit" }, `${p.caption} · ${p.credit || "NASA/JPL-Caltech/ASU/MSSS"}`));
+    return li;
+  }
+  function renderTaskPage() {
+    const today = $("#task-today"), far = $("#task-far");
+    today.innerHTML = ""; far.innerHTML = "";
+    for (const t of D.tasks) (t.today ? today : far).append(taskCard(t));
+    const nFar = D.tasks.filter((t) => !t.today).length;
+    $("#btn-more-tasks span").textContent = far.hidden ? `Show ${nFar} tasks farther away` : "Hide tasks farther away";
+    updateTaskSummary();
+  }
+  function updateTaskSummary() {
+    const picked = D.tasks.filter((t) => state.draft.has(t.id));
+    const go = $("#btn-tasks-go");
+    go.disabled = picked.length === 0;
+    if (!picked.length) { $("#tasks-summary").textContent = "No tasks picked yet. Tick at least one."; return; }
+    const pts = picked.reduce((s, t) => s + t.points, 0), mins = picked.reduce((s, t) => s + t.minutes, 0);
+    const far = Math.max(...picked.map(habKm));
+    $("#tasks-summary").innerHTML = `<strong>${picked.length}</strong> task${picked.length > 1 ? "s" : ""} · <strong>+${pts}</strong> pts · ${Math.floor(mins / 60) ? Math.floor(mins / 60) + " h " : ""}${mins % 60} min on site · farthest stop ${far.toFixed(1)} km from the habitat`;
+  }
+  function openTasks() {
+    const again = state.planned;
+    state.draft = new Set(again ? state.selected[TODAY.id] : []);
+    $("#tasks-title").textContent = again ? "Change your mind?" : "What do you want to do today?";
+    $("#tasks-sub").textContent = again
+      ? "Add or drop tasks. When you confirm, the planner redesigns all three routes."
+      : "Pick one or more tasks. When you confirm, the planner works out the best order and three routes to get there and back safely.";
+    $("#btn-tasks-go").firstChild.textContent = again ? "Confirm and redesign route " : "Confirm and plan my route ";
+    $("#btn-tasks-cancel").hidden = !again;
+    renderTaskPage();
+    setScreen("tasks");
+    $("#tasks").scrollTop = 0;
+    const first = $("#tasks input"); if (first) first.focus({ preventScroll: true });
+  }
+  function confirmTasks() {
+    if (!state.draft.size) return;
+    const go = $("#btn-tasks-go"); go.disabled = true; go.firstChild.textContent = "Planning… ";
+    setTimeout(() => { // let the button repaint before the planner runs
+      state.selected[TODAY.id] = new Set(state.draft);
+      planMission(TODAY);
+      state.routeIdx = 0; state.planned = true;
+      setScreen("plan");
+      renderPlan(); buildMarkers(); drawOverlays(); fitRoute();
+      $(".plan-only.side-scroll").scrollTop = 0;
+      toast(`Route planned for ${state.draft.size} task${state.draft.size > 1 ? "s" : ""}.`);
+      $("#btn-start").focus({ preventScroll: true });
+    }, 30);
+  }
+  $("#btn-tasks-go").addEventListener("click", confirmTasks);
+  $("#btn-tasks-cancel").addEventListener("click", () => setScreen("plan"));
+  $("#btn-change").addEventListener("click", openTasks);
+  $("#btn-more-tasks").addEventListener("click", () => {
+    const far = $("#task-far"); far.hidden = !far.hidden;
+    $("#btn-more-tasks").setAttribute("aria-expanded", String(!far.hidden));
+    $("#btn-more-tasks i").className = `ph ${far.hidden ? "ph-caret-down" : "ph-caret-up"}`;
+    $("#btn-more-tasks span").textContent = far.hidden ? `Show ${D.tasks.filter((t) => !t.today).length} tasks farther away` : "Hide tasks farther away";
+  });
+
   // ---------- Wiring ----------
-  $("#btn-intro").addEventListener("click", () => { setScreen("plan"); fitRoute(); $("#mission-tabs button").focus({ preventScroll: true }); });
+  $("#btn-intro").addEventListener("click", openTasks);
   $("#btn-start").addEventListener("click", startEva);
   $("#btn-sample").addEventListener("click", collectSample);
   $("#btn-again").addEventListener("click", backToPlan);
@@ -1021,7 +1124,7 @@
   $("#sources").addEventListener("click", (e) => { if (e.target.id === "sources") $("#sources").hidden = true; });
 
   document.addEventListener("keydown", (e) => {
-    if (e.target.matches("input, textarea")) return;
+    if (e.target.matches('input:not([type="checkbox"]), textarea')) return;
     const k = e.key.toLowerCase();
     if (k === "escape" && !$("#photo").hidden) { closePhoto(); return; }
     if (k === "escape") {
@@ -1039,6 +1142,11 @@
     if (k === "+" || k === "=") { map.zoomBy(1); return; }
     if (k === "-") { map.zoomBy(-1); return; }
     if (state.screen === "intro" && k === "enter") { e.preventDefault(); $("#btn-intro").click(); return; }
+    if (state.screen === "tasks") {
+      if (k === "enter" && !e.target.matches("button")) { e.preventDefault(); confirmTasks(); }
+      if (k === "escape" && state.planned) setScreen("plan");
+      return;
+    }
     if (state.screen === "plan") {
       if (k === "enter" && !e.target.matches("button")) { e.preventDefault(); startEva(); }
       if (["1", "2", "3"].includes(k)) selectRoute(Number(k) - 1);
@@ -1215,7 +1323,7 @@
   $("#sol-label").textContent = `Sol ${D.sol}`;
   $("#sol-inline").textContent = D.sol;
   $("#cond-temp").textContent = `−${Math.abs(D.conditions.tempC)} °C`;
-  renderTabs();
+  $("#tasks-sol").textContent = D.sol;
   renderPlan();
   buildMarkers();
   const v0 = map.fitBounds([D.habitat.pos, ...mission().routes.flatMap((r) => r.dense)], 90, 16.5);

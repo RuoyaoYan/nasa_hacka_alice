@@ -44,7 +44,9 @@ deploy from branch) and share the link.
 
 ## How it works
 
-1. **Pick a mission**: delta clay sample, crater rim survey or dune field study.
+1. **Pick today's tasks**: a full page briefing shows five everyday tasks near the
+   habitat, plus ten farther away. Each card has a real Perseverance photo of the
+   place, points, time on site and distance. Tick up to seven and confirm.
 2. **Choose a route**: *Safest*, *Fastest* or *Easiest*. Each visits the same
    targets you ticked and shows Komoot style route details (below).
 3. **Walk it**: the HUD tracks oxygen, suit power, radiation dose and distance.
@@ -105,9 +107,10 @@ site. To retrace a route precisely on the HiRISE imagery, press `D`, click along
 your path, and copy the logged `[lat, lon]` points from the browser console into
 `data/missions.js`. The cursor position is shown in the corner of the map.
 
-**Photos.** Save Perseverance raw images as `assets/photos/delta.jpg`,
-`assets/photos/dunes.jpg` and `assets/photos/rim.jpg`. Until then, stops show a
-drawn illustration.
+**Photos.** Every task shows a real Perseverance image of that place (or the
+closest one the rover imaged), loaded from NASA's servers when the game runs.
+The list, with PIA numbers and credits, is `photos` in `data/missions.js`. If an
+image cannot load, the card shows a HiRISE view of the exact spot instead.
 
 ## How routes are planned
 
@@ -132,9 +135,9 @@ danger on the way. `planner.js` solves exactly that:
 The three options use different risk weights: **Safest** forbids slopes over 12°
 and every boulder field, **Fastest** accepts sand, rocks and slopes up to 25°,
 and **Easiest** keeps to gentle ground (slopes under 9°, long detours around sand)
-so it is longer but has the least climbing. Tick
-targets on or off in the panel, or click a faint **+** marker on the map, and all
-three are re-planned instantly. Terrain events (boulders, sand) fire where the
+so it is longer but has the least climbing. Press
+**Change your mind?** on the route page to go back to the task page, add or drop
+tasks, and confirm: all three routes are redesigned. Terrain events (boulders, sand) fire where the
 chosen route actually enters those zones.
 
 ## Real hazard detection
@@ -190,13 +193,14 @@ These are simple game rules, **not real mission figures**:
 - Radiation background uses roughly the surface average Curiosity's RAD measured
   (about 0.64 mSv per day); event doses are game values
 
-## Missions
+## Tasks
 
-| Mission | Difficulty | Targets | Typical tour |
-|---|---|---|---|
-| Delta front survey | Easy | Hawksbill Gap clay, Three Forks depot, Enchanted Lake, Séítah wind, landing site (+2 optional) | 8 to 10 km |
-| Upper fan and Belva crater | Moderate | Belva crater wall, Hawksbill Gap, depot inventory, Enchanted Lake, upper fan boulders (+2 optional) | 11 to 14 km |
-| Crater rim expedition | Hard | Lookout Hill rim rock, Neretva Vallis, Belva, rim slope radiation, Kodiak (+2 optional) | 19 to 24 km |
+| Today's five | Farther away |
+|---|---|
+| Clay sample at Hawksbill Gap, Three Forks sample depot, wind reading in Séítah, landing site survey, Enchanted Lake mudstone | Kodiak butte, Séítah sand, Belva crater wall, upper fan boulders, isolated hill, northern fan lobe, Neretva Vallis inlet, Lookout Hill rim rock, rim slope radiation, southern rim outcrop |
+
+The task with the most points becomes the main task. A tour over 15 km adds a
+radiation event on the open slopes.
 
 Landmark positions and the terrain model are approximate, for gameplay.
 
@@ -212,7 +216,6 @@ tools/terrain_hazard/  Python hazard grid from the HiRISE DTM and orthoimage
 app.js              planning, route overlays, EVA loop, events, scoring
 data/missions.js    missions, routes, stops, events, terrain
 assets/fonts/       Poppins (SIL Open Font License)
-assets/photos/      put Perseverance photos here
 docs/               proposal, build plan, mockups, screenshots
 ```
 
