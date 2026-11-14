@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Momoot · Plan your Marswalk</title>
+  <meta name="description" content="Momoot is a route planner for astronauts on Mars. Pick a science mission, choose a safe route built from NASA data, and react when conditions change.">
+  <meta property="og:title" content="Momoot · Plan your Marswalk">
+  <meta property="og:description" content="Komoot for Mars, built from NASA mission data for the 2026 NASA Space Apps Challenge.">
+  <meta property="og:type" content="website">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23181818'/%3E%3Ccircle cx='16' cy='16' r='9' fill='%23FF6B2C'/%3E%3Cpath d='M9 19 Q16 12 23 15' stroke='%23181818' stroke-width='2.5' fill='none'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body data-screen="intro">
+  <a class="skip-link button-sm" href="#main">Skip to the map</a>
+
+  <!-- Top bar -->
+  <header class="topbar" aria-label="Mission status">
+    <div class="brand heading-6">Mo<span>moot</span></div>
+    <ul class="chips" aria-label="Today's conditions">
+      <li class="chip body-6"><i class="ph ph-calendar-blank" aria-hidden="true"></i><span id="sol-label">Sol 23</span></li>
+      <li class="chip body-6"><i class="ph ph-wind" aria-hidden="true"></i>Dust <strong id="cond-dust" class="good">Low</strong></li>
+      <li class="chip body-6"><i class="ph ph-thermometer-simple" aria-hidden="true"></i><strong id="cond-temp">−38 °C</strong></li>
+      <li class="chip body-6"><i class="ph ph-radioactive" aria-hidden="true"></i>Radiation <strong id="cond-rad" class="good">Normal</strong></li>
+    </ul>
+    <div class="spacer"></div>
+    <div class="score body-5">Science <strong class="title-1" id="score-total">0</strong> pts</div>
+    <button class="btn btn-ghost button-sm" id="btn-sources" type="button"><i class="ph ph-database" aria-hidden="true"></i>NASA data</button>
+  </header>
+
+  <main id="main" tabindex="-1">
+    <!-- The map -->
+    <svg id="map" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" role="img" aria-labelledby="map-title">
+      <title id="map-title">Map of Jezero crater with the habitat, science targets and route options</title>
+      <defs>
+        <pattern id="pat-sand" width="16" height="12" patternUnits="userSpaceOnUse"><path d="M0 6 Q4 2 8 6 T16 6" stroke="#F0C69C" stroke-width="1.3" fill="none" opacity=".75"/></pattern>
+        <pattern id="pat-steep" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="10" stroke="#F05252" stroke-width="3" opacity=".6"/></pattern>
+      </defs>
+      <g id="layer-base"></g>
+      <image id="layer-photo" href="assets/map.jpg" x="0" y="0" width="1600" height="900" preserveAspectRatio="xMidYMid slice" visibility="hidden"/>
+      <g id="layer-minerals"></g>
+      <g id="layer-slope"></g>
+      <g id="layer-hazards"></g>
+      <g id="layer-labels"></g>
+      <g id="layer-routes"></g>
+      <g id="layer-markers"></g>
+      <g id="layer-draw"></g>
+    </svg>
+    <p class="map-note caption-5" id="map-note">Stylised map. Add a Mars Trek export as assets/map.jpg to use real imagery.</p>
+
+    <!-- PLAN: missions (left) -->
+    <aside class="panel panel-left plan-only" aria-labelledby="missions-title">
+      <h2 class="caption-3 overline" id="missions-title">Today's missions</h2>
+      <div class="mission-list" id="mission-list" role="radiogroup" aria-labelledby="missions-title"></div>
+
+      <h2 class="caption-3 overline" id="layers-title">NASA data layers</h2>
+      <div class="layer-list" role="group" aria-labelledby="layers-title">
+        <label class="toggle"><span><span class="title-4">Imagery</span><span class="caption-5 muted" id="imagery-src">Stylised base, HiRISE when added</span></span><input type="checkbox" data-layer="photo" checked><span class="switch" aria-hidden="true"></span></label>
+        <label class="toggle"><span><span class="title-4">Slope</span><span class="caption-5 muted">HiRISE elevation model</span></span><input type="checkbox" data-layer="slope" checked><span class="switch" aria-hidden="true"></span></label>
+        <label class="toggle"><span><span class="title-4">Minerals</span><span class="caption-5 muted">CRISM, Mars Reconnaissance Orbiter</span></span><input type="checkbox" data-layer="minerals"><span class="switch" aria-hidden="true"></span></label>
+        <label class="toggle"><span><span class="title-4">Hazards</span><span class="caption-5 muted">HiRISE rocks, THEMIS sand</span></span><input type="checkbox" data-layer="hazards" checked><span class="switch" aria-hidden="true"></span></label>
+      </div>
+    </aside>
+
+    <!-- PLAN: routes (right) -->
+    <aside class="panel panel-right plan-only" aria-labelledby="routes-title">
+      <h2 class="caption-3 overline" id="routes-title">Choose your route</h2>
+      <div class="route-list" id="route-list" role="radiogroup" aria-labelledby="routes-title"></div>
+
+      <dl class="stats" id="route-stats"></dl>
+
+      <h3 class="caption-4 muted sub">Elevation, one way</h3>
+      <svg class="profile" id="route-profile" viewBox="0 0 300 56" preserveAspectRatio="none" role="img" aria-label="Elevation profile of the selected route"></svg>
+
+      <h3 class="caption-4 muted sub">Terrain</h3>
+      <div class="mix" id="route-mix" aria-hidden="true"></div>
+      <p class="caption-5 muted mix-legend" id="route-mix-legend"></p>
+
+      <h3 class="caption-4 muted sub">Risk</h3>
+      <div class="risk" id="route-risk" aria-hidden="true"><span></span><span></span><span></span></div>
+
+      <button class="btn btn-primary button-md btn-start" id="btn-start" type="button">Start EVA <kbd class="key">Enter</kbd></button>
+    </aside>
+
+    <!-- EVA: objectives -->
+    <section class="panel hud-objectives eva-only" aria-labelledby="obj-title">
+      <h2 class="caption-3 overline" id="obj-title">Mission</h2>
+      <p class="title-3" id="obj-mission"></p>
+      <ol class="checklist" id="obj-list"></ol>
+      <p class="caption-3 accent" id="obj-points"></p>
+    </section>
+
+    <!-- EVA: timer -->
+    <div class="hud-timer eva-only" aria-live="off">
+      <span class="caption-3 overline">EVA time</span>
+      <span class="heading-4 mono" id="eva-clock">00:00</span>
+      <span class="caption-5 muted" id="eva-phase">Outbound</span>
+    </div>
+
+    <!-- EVA: vitals -->
+    <section class="panel hud-vitals eva-only" aria-labelledby="vit-title">
+      <h2 class="caption-3 overline" id="vit-title">Suit status</h2>
+      <div class="vital"><div class="vital-row body-6"><span>Oxygen</span><strong id="v-o2">100 %</strong></div><div class="bar"><span id="b-o2" class="fill o2"></span></div></div>
+      <div class="vital"><div class="vital-row body-6"><span>Suit power</span><strong id="v-suit">100 %</strong></div><div class="bar"><span id="b-suit" class="fill suit"></span></div></div>
+      <div class="vital"><div class="vital-row body-6"><span>Dose this walk</span><strong id="v-dose">0.00 mSv</strong></div><div class="bar"><span id="b-dose" class="fill dose"></span></div></div>
+      <div class="vital"><div class="vital-row body-6"><span>Distance</span><strong id="v-dist">0.0 km</strong></div></div>
+    </section>
+
+    <!-- EVA: stop card -->
+    <section class="panel hud-stop eva-only" id="stop-card" aria-live="polite" hidden>
+      <h2 class="caption-3 overline" id="stop-kicker">Science stop</h2>
+      <figure class="stop-photo" id="stop-photo"></figure>
+      <p class="title-3" id="stop-name"></p>
+      <p class="body-6 muted" id="stop-detail"></p>
+      <button class="btn btn-primary button-md" id="btn-sample" type="button">Collect sample <kbd class="key">S</kbd></button>
+    </section>
+
+    <!-- EVA: hotkeys -->
+    <div class="hud-keys eva-only" aria-hidden="true">
+      <span class="hk body-6"><kbd class="key">Space</kbd>Pause</span>
+      <span class="hk body-6"><kbd class="key">F</kbd>Fast forward</span>
+      <span class="hk body-6"><kbd class="key">L</kbd>Layers</span>
+    </div>
+  </main>
+
+  <!-- Intro -->
+  <div class="overlay" id="intro" role="dialog" aria-modal="true" aria-labelledby="intro-title">
+    <div class="modal intro">
+      <p class="caption-3 overline">NASA Space Apps 2026 · Martian Map</p>
+      <h1 class="heading-3" id="intro-title">Plan your first<br>Marswalk</h1>
+      <p class="body-3 muted">Momoot is a route planner for astronauts on Mars. Pick today's science mission, compare routes built from NASA orbiter data, then walk it. Conditions on Mars change, so be ready to adapt.</p>
+      <ol class="intro-steps body-6">
+        <li><i class="ph ph-flag-banner" aria-hidden="true"></i>Pick a mission</li>
+        <li><i class="ph ph-path" aria-hidden="true"></i>Choose a route</li>
+        <li><i class="ph ph-person-simple-walk" aria-hidden="true"></i>Walk it and react</li>
+      </ol>
+      <button class="btn btn-primary button-md" id="btn-intro" type="button">Start planning <kbd class="key">Enter</kbd></button>
+    </div>
+  </div>
+
+  <!-- Event -->
+  <div class="overlay" id="event" role="dialog" aria-modal="true" aria-labelledby="event-title" hidden>
+    <div class="modal event">
+      <div class="event-head">
+        <p class="caption-3 overline warn" id="event-kicker"><i class="ph-fill ph-warning" aria-hidden="true"></i><span></span></p>
+        <p class="body-6 muted" id="event-countdown"></p>
+      </div>
+      <h2 class="heading-4" id="event-title"></h2>
+      <p class="body-3 muted" id="event-text"></p>
+      <div class="choices" id="event-choices"></div>
+      <p class="caption-5 muted" id="event-source"></p>
+    </div>
+  </div>
+
+  <!-- End -->
+  <div class="overlay" id="end" role="dialog" aria-modal="true" aria-labelledby="end-title" hidden>
+    <div class="modal end">
+      <p class="caption-3 overline" id="end-kicker">EVA complete</p>
+      <h2 class="heading-3" id="end-title"></h2>
+      <p class="body-3 muted" id="end-text"></p>
+      <dl class="stats end-stats" id="end-stats"></dl>
+      <ol class="log body-6" id="end-log"></ol>
+      <div class="end-actions">
+        <button class="btn btn-primary button-md" id="btn-again" type="button">Plan another walk</button>
+        <button class="btn btn-ghost button-md" id="btn-retry" type="button">Retry this route</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sources -->
+  <div class="overlay" id="sources" role="dialog" aria-modal="true" aria-labelledby="sources-title" hidden>
+    <div class="modal sources">
+      <div class="event-head">
+        <h2 class="heading-5" id="sources-title">NASA data behind Momoot</h2>
+        <button class="btn btn-ghost button-sm" id="btn-sources-close" type="button" aria-label="Close"><i class="ph ph-x" aria-hidden="true"></i>Close</button>
+      </div>
+      <table class="body-6 src-table">
+        <thead><tr><th scope="col" class="title-5">Feature</th><th scope="col" class="title-5">Data</th><th scope="col" class="title-5">Type</th></tr></thead>
+        <tbody>
+          <tr><td>Base map</td><td>HiRISE and CTX imagery, Mars Reconnaissance Orbiter, via <a href="https://trek.nasa.gov/mars/" target="_blank" rel="noopener">Mars Trek</a></td><td>Optical</td></tr>
+          <tr><td>Slope and climb</td><td>HiRISE elevation models, via Mars Trek</td><td>Topographic</td></tr>
+          <tr><td>Science targets</td><td>CRISM mineral maps, Mars Reconnaissance Orbiter</td><td>Spectral</td></tr>
+          <tr><td>Sand vs bedrock</td><td>THEMIS thermal data, Mars Odyssey</td><td>Thermal</td></tr>
+          <tr><td>Stop photos</td><td>Perseverance raw images gallery</td><td>Ground imagery</td></tr>
+          <tr><td>Dust events</td><td>Perseverance MEDA and Curiosity REMS weather data</td><td>Atmospheric</td></tr>
+          <tr><td>Radiation events</td><td>Curiosity RAD measurements</td><td>Radiation</td></tr>
+        </tbody>
+      </table>
+      <p class="caption-5 muted">The map in this prototype is a stylised stand in drawn from the Jezero layout. Oxygen, speed and dose numbers follow simple game rules, not real spacesuit figures. Map tiles are also available through the <a href="https://api.nasa.gov/mars-wmts/catalog" target="_blank" rel="noopener">Mars Trek WMTS catalog</a>.</p>
+    </div>
+  </div>
+
+  <div class="toast body-5" id="toast" role="status" aria-live="polite" hidden></div>
+
+  <script src="data/missions.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
