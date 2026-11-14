@@ -4,14 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Momoot · Plan your Marswalk in Jezero crater</title>
-  <meta name="description" content="Momoot is a route planner for astronauts on Mars. Pick a science mission in Jezero crater, compare routes on real NASA HiRISE and CTX imagery, and react when conditions change.">
+  <meta name="description" content="Momoot is a route planner for astronauts on Mars. Pick today's science tasks in Jezero crater, compare routes on real NASA HiRISE and CTX imagery, and react when conditions change.">
   <meta property="og:title" content="Momoot · Komoot for Mars">
   <meta property="og:description" content="Plan a Marswalk on real NASA Mars Trek imagery. Built for the 2026 NASA Space Apps Challenge.">
   <meta property="og:type" content="website">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23C2410C'/%3E%3Cpath d='M6 22 L13 12 L18 18 L21 14 L26 22Z' fill='%23fff'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
   <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css">
-  <link rel="stylesheet" href="style.css?v=20261114l">
+  <link rel="stylesheet" href="style.css?v=20261114m">
 </head>
 <body data-screen="intro">
   <a class="skip-link button-sm" href="#side">Skip to mission details</a>
@@ -25,7 +25,7 @@
       <li class="chip body-6"><i class="ph ph-radioactive" aria-hidden="true"></i>Radiation <strong id="cond-rad" class="good">Normal</strong></li>
     </ul>
     <div class="spacer"></div>
-    <div class="score body-5">Science <strong class="title-1" id="score-total">0</strong> pts</div>
+    <div class="score body-6" title="Data collected on all EVAs this session">Collected <strong class="title-4" id="score-total">0 samples · 0 image sets · 0 measurements</strong></div>
     <button class="btn btn-ghost button-sm" id="btn-sources" type="button"><i class="ph ph-database" aria-hidden="true"></i>NASA data</button>
   </header>
 
@@ -299,7 +299,7 @@
       <label class="field"><span class="title-4">Note for the next astronaut</span><textarea class="input body-6" id="photo-note" rows="3" maxlength="240"></textarea></label>
       <p class="caption-5 field-error" id="photo-error" hidden>Add a short title so the next crew knows what this is.</p>
       <div class="end-actions">
-        <button class="btn btn-primary button-md" id="btn-photo-save" type="button">Save photo point · +10 pts</button>
+        <button class="btn btn-primary button-md" id="btn-photo-save" type="button">Save photo point</button>
         <button class="btn btn-ghost button-md" id="btn-photo-cancel" type="button">Cancel</button>
       </div>
     </div>
@@ -340,10 +340,10 @@
     if (b) { b.hidden = false; b.querySelector("code").textContent = e.message + " (" + (e.filename || "").split("/").pop() + ":" + e.lineno + ")"; }
   });
   </script>
-  <script src="data/missions.js?v=20261114l"></script>
-  <script src="marsmap.js?v=20261114l"></script>
-  <script src="planner.js?v=20261114l"></script>
-  <script src="hazardscan.js?v=20261114l"></script>
-  <script src="app.js?v=20261114l"></script>
+  <script src="data/missions.js?v=20261114m"></script>
+  <script src="marsmap.js?v=20261114m"></script>
+  <script src="planner.js?v=20261114m"></script>
+  <script src="hazardscan.js?v=20261114m"></script>
+  <script src="app.js?v=20261114m"></script>
 </body>
 </html>

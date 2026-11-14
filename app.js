@@ -27,7 +27,7 @@
   };
 
   const state = {
-    screen: "intro", missionIdx: 0, routeIdx: 0, totalScore: 0,
+    screen: "intro", missionIdx: 0, routeIdx: 0, totals: { sample: 0, photo: 0, measure: 0, sightsee: 0, points: 0 },
     drawMode: false, drawPts: [], run: null,
     showRoutes: true, showHazards: true, showTraverse: false, traverse: null
   };
@@ -60,6 +60,13 @@
   const TODAY = D.missions[0];
   TODAY.objectives = D.tasks;
   state.selected = { [TODAY.id]: new Set(D.tasks.filter((t) => t.today).slice(0, 3).map((t) => t.id)) };
+  // What scientists track instead of points: priority and the data each task returns
+  const priority = (t) => (t.points >= 250 ? "High" : t.points >= 80 ? "Medium" : "Low");
+  const PRODUCT = { sample: ["core sample", "core samples"], photo: ["image set", "image sets"], measure: ["measurement", "measurements"], sightsee: ["panorama", "panoramas"] };
+  function returnOf(list) {
+    const n = {}; for (const t of list) n[t.type] = (n[t.type] || 0) + 1;
+    return Object.keys(PRODUCT).filter((k) => n[k]).map((k) => `${n[k]} ${PRODUCT[k][n[k] > 1 ? 1 : 0]}`).join(" · ") || "Nothing yet";
+  }
   state.landing = D.landingSites[0].id;
   state.draftLanding = state.landing;
   const landingOf = (id) => D.landingSites.find((s) => s.id === id);
@@ -311,14 +318,14 @@
     if (false) {
       for (const o of m.objectives) {
         if (onRoute.has(o.id)) continue;
-        const el = pinEl("off", "+", o.name, `${TYPE[o.type].label} · +${o.points} pts${o.optional ? " · optional" : ""}`);
+        const el = pinEl("off", "+", o.name, `${TYPE[o.type].label} · ${priority(o)} priority`);
         el.classList.add("clickable"); el.title = "Add this target";
         el.addEventListener("click", (e) => { e.stopPropagation(); toggleObjective(o.id, true); });
         list.push({ pos: o.pos, el });
       }
     }
     for (const s of r.allStops) {
-      const el = pinEl(s.main ? "target" : "stop", String(s.order), s.name, `${TYPE[s.type].label} · +${s.points} pts`, s.main ? null : r.color);
+      const el = pinEl(s.main ? "target" : "stop", String(s.order), s.name, `${TYPE[s.type].label} · ${priority(s)} priority`, s.main ? null : r.color);
       list.push({ pos: s.pos, el });
     }
     if (state.showPhotos) {
@@ -433,8 +440,8 @@
     const meta = $("#m-meta"); meta.innerHTML = "";
     const addMeta = (icon, label, val) => { const li = html("li"); li.innerHTML = `<i class="ph ${icon}" aria-hidden="true"></i>`; li.append(document.createTextNode(label + " "), html("strong", {}, val)); meta.append(li); };
     addMeta("ph-mountains", "Difficulty", ["", "Easy", "Moderate", "Hard"][m.difficulty]);
-    addMeta("ph-star", "Reward", `+${r.allStops.reduce((t, s) => t + s.points, 0)} pts`);
-    addMeta("ph-flag-banner", "Targets", `${r.allStops.length}`);
+    addMeta("ph-flag-banner", "Tasks", `${r.allStops.length}`);
+    addMeta("ph-package", "Science return", returnOf(r.allStops));
     renderObjectives(m, r);
 
     const list = $("#route-list"); list.innerHTML = "";
@@ -713,7 +720,7 @@
     ol.style.setProperty("--route-color", r.color);
     const items = [{ badge: "A", cls: "", name: "Habitat", km: 0, pos: D.habitat.pos, sub: `${D.habitat.name}. Board the rover and head out` }];
     for (const s of r.allStops) {
-      items.push({ badge: String(s.order), cls: s.main ? "target" : "stop", name: s.name, km: s.at * r.km, pos: s.pos, sub: `${TYPE[s.type].label} · ${s.minutes} min · +${s.points} pts. ${s.detail}`, photo: s.id });
+      items.push({ badge: String(s.order), cls: s.main ? "target" : "stop", name: s.name, km: s.at * r.km, pos: s.pos, sub: `${TYPE[s.type].label} · ${s.minutes} min on site · ${priority(s)} priority. ${s.detail}`, photo: s.id });
     }
     items.push({ badge: "A", cls: "", name: "Back at the habitat", km: r.km, pos: D.habitat.pos, sub: "Tour complete" });
     for (const it of items) {
@@ -753,7 +760,7 @@
     state.run = {
       m, r, km: 0, dir: 1, maxKm: 0,
       o2: 100, suit: 100, dose: 0, minutes: 0, walked: 0,
-      science: 0, stopIdx: 0, eventIdx: 0, paused: false, fast: false, kmPerSec: r.km / RULES.tourSeconds,
+      stopIdx: 0, eventIdx: 0, paused: false, fast: false, kmPerSec: r.km / RULES.tourSeconds,
       atStop: null, returnedEarly: false, rescued: false, lowWarned: false,
       done: new Set(["leave"]), skipped: new Set(),
       log: [`Left the habitat in the rover on the ${r.label.toLowerCase()} route`]
@@ -784,8 +791,8 @@
       li.append(box, html("span", {}, it.label));
       ol.append(li);
     }
-    const possible = run.r.allStops.reduce((a, s) => a + s.points, 0);
-    $("#obj-points").textContent = `Science ${run.science} of ${possible} pts`;
+    const doneStops = run.r.allStops.filter((s) => run.done.has(s.key));
+    $("#obj-points").textContent = `${doneStops.length} of ${run.r.allStops.length} tasks done · ${returnOf(doneStops)}`;
   }
 
   let last = 0;
@@ -859,13 +866,13 @@
   function arriveStop(stop, key) {
     const run = state.run;
     run.atStop = { stop, key };
-    $("#stop-kicker").textContent = `${stop.main ? "Main target" : "Target " + stop.order} · ${TYPE[stop.type].label}`;
+    $("#stop-kicker").textContent = `${stop.main ? "Main task" : "Task " + stop.order} · ${TYPE[stop.type].label}`;
     $("#stop-name").textContent = stop.name;
     $("#stop-detail").textContent = stop.detail;
     renderPhoto($("#stop-photo"), stop.id, stop.name);
     const b = $("#btn-sample"); b.innerHTML = "";
     const verb = { sample: "Collect sample", photo: "Take photos", measure: "Take measurement", sightsee: "Take photos for the next crew" }[stop.type] || "Collect sample";
-    b.append(document.createTextNode(`${verb} · +${stop.points} pts `), html("kbd", { class: "key" }, "S"));
+    b.append(document.createTextNode(`${verb} `), html("kbd", { class: "key" }, "S"));
     $("#stop-card").hidden = false;
     $("#stop-card").scrollIntoView({ block: "nearest", behavior: "smooth" });
     b.focus({ preventScroll: true });
@@ -874,18 +881,18 @@
   function collectSample() {
     const run = state.run; if (!run || !run.atStop) return;
     const { stop, key } = run.atStop;
-    run.science += stop.points; run.done.add(key);
+    run.done.add(key);
     const mins = stop.minutes || RULES.stopMinutes;
     run.minutes += mins; run.o2 -= RULES.stopO2; run.dose += mins * RULES.dosePerMinute;
     if (stop.type === "sightsee") {
-      run.log.push(`Photographed ${stop.name} (+${stop.points} pts) and left it as a view point for the next crew`);
+      run.log.push(`Panorama at ${stop.name}, saved as a view point for the next crew`);
       highlights.push({ id: `v${Date.now()}`, pos: stop.pos.slice(), tag: "view", title: stop.name, note: stop.detail, by: `You, Sol ${D.sol}` });
       saveHighlights();
-    } else run.log.push(`${{ photo: "Took photos at", measure: "Took a measurement at" }[stop.type] || "Collected a sample at"} ${stop.name} (+${stop.points} pts)`);
+    } else run.log.push(`${stop.name}: ${PRODUCT[stop.type][0]} collected (${mins} min on site)`);
     run.atStop = null;
     $("#stop-card").hidden = true;
-    if (stop.main) run.log.push("Main target done");
-    toast("Sample logged. Press P to leave a photo point for the next crew.");
+    if (stop.main) run.log.push("Main task done");
+    toast(`${TYPE[stop.type].label} logged. Press P to leave a photo point for the next crew.`);
     renderChecklist();
   }
 
@@ -996,24 +1003,34 @@
   // ---------- End ----------
   function finish() {
     const run = state.run;
-    const bonus = !run.rescued && run.o2 > 30 ? 50 : 0;
-    let score = run.science + bonus, title, text;
-    if (run.rescued) { score = Math.max(0, run.science - 100); title = "Rescued"; text = "Life support ran out before you reached the habitat. On Mars, the way home is part of the mission."; }
-    else if (run.returnedEarly) { title = "Safe call"; text = "You turned back before conditions got worse. No sample is worth a crew member."; }
-    else if (run.o2 > 30) { title = "Safe explorer"; text = "Tour complete with a healthy life support reserve. That earns a +50 pts safety bonus."; }
-    else { title = "Bold scientist"; text = "Tour complete, but your life support reserve was thin. Next time, pick a route with more margin."; }
-    state.totalScore += score;
-    $("#score-total").textContent = state.totalScore;
-    $("#end-kicker").textContent = run.rescued ? "EVA ended" : "EVA complete";
+    const stops = run.r.allStops, done = stops.filter((s) => run.done.has(s.key));
+    const missed = stops.filter((s) => !run.done.has(s.key));
+    const reserve = Math.max(0, run.o2);
+    let title, text;
+    if (run.rescued) { title = "EVA aborted"; text = "Life support reached its limit before the crew got back to the habitat. Plan a shorter tour or a route with more margin."; }
+    else if (run.returnedEarly) { title = "Returned early"; text = `The crew turned back when conditions changed. ${done.length} of ${stops.length} tasks done.`; }
+    else if (!missed.length) { title = "All tasks done"; text = `Every task on the plan was completed, with ${reserve.toFixed(0)} % life support in reserve.`; }
+    else { title = "EVA complete"; text = `${done.length} of ${stops.length} tasks done. Skipped: ${missed.map((s) => s.name).join(", ")}.`; }
+    if (!run.rescued && reserve < 30) text += " The life support reserve was below the 30 % safety margin.";
+    for (const s of done) state.totals[s.type]++;
+    state.totals.points += run.photos || 0;
+    renderTotals();
+    $("#end-kicker").textContent = "EVA report · Sol " + D.sol;
     $("#end-title").textContent = title;
     $("#end-text").textContent = text;
     const stats = $("#end-stats"); stats.innerHTML = "";
     const add = (dd, dt) => { const d = html("div"); d.append(html("dd", { class: "heading-6" }, dd), html("dt", { class: "caption-5" }, dt)); stats.append(d); };
-    add(`${score}`, "Science pts"); add(`${Math.max(0, run.o2).toFixed(0)} %`, "Life support left"); add(fmtClock(run.minutes), "EVA time"); add(run.dose.toFixed(2), "Dose, mSv");
+    add(`${done.length} / ${stops.length}`, "Tasks done"); add(`${reserve.toFixed(0)} %`, "Life support left"); add(fmtClock(run.minutes), "EVA time"); add(run.dose.toFixed(2), "Dose, mSv");
     const log = $("#end-log"); log.innerHTML = "";
+    log.append(html("li", { class: "strong" }, `Science return: ${returnOf(done)}${run.photos ? ` · ${run.photos} crew photo point${run.photos > 1 ? "s" : ""}` : ""}`));
     for (const l of run.log) log.append(html("li", {}, l));
     setScreen("end");
     $("#btn-again").focus({ preventScroll: true });
+  }
+  function renderTotals() {
+    const t = state.totals;
+    const pl = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
+    $("#score-total").textContent = `${pl(t.sample, "sample")} · ${pl(t.photo + t.sightsee, "image set")} · ${pl(t.measure, "measurement")}`;
   }
 
   function backToPlan() {
@@ -1055,7 +1072,7 @@
     const km = habKm(t), [dc, dl] = distClass(km);
     const body = html("div", { class: "t-body" });
     const meta = html("p", { class: "t-meta caption-4" });
-    meta.innerHTML = `<span><strong>+${t.points}</strong> pts</span><span><strong>${t.minutes}</strong> min on site</span><span class="${dc}">${dl} · ${km.toFixed(1)} km</span>`;
+    meta.innerHTML = `<span><strong>${priority(t)}</strong> priority</span><span><strong>${t.minutes}</strong> min on site</span><span>Returns <strong>1 ${PRODUCT[t.type][0]}</strong></span><span class="${dc}">${dl} · ${km.toFixed(1)} km</span>`;
     body.append(html("p", { class: "title-3" }, t.name), html("p", { class: "body-6 muted" }, t.detail), meta);
     lab.append(body);
     li.append(cb, lab);
@@ -1087,9 +1104,9 @@
     const go = $("#btn-tasks-go");
     go.disabled = picked.length === 0;
     if (!picked.length) { $("#tasks-summary").textContent = "No tasks picked yet. Tick at least one."; return; }
-    const pts = picked.reduce((s, t) => s + t.points, 0), mins = picked.reduce((s, t) => s + t.minutes, 0);
+    const mins = picked.reduce((s, t) => s + t.minutes, 0);
     const far = Math.max(...picked.map(habKm));
-    $("#tasks-summary").innerHTML = `<strong>${picked.length}</strong> task${picked.length > 1 ? "s" : ""} · <strong>+${pts}</strong> pts · ${Math.floor(mins / 60) ? Math.floor(mins / 60) + " h " : ""}${mins % 60} min on site · farthest stop ${far.toFixed(1)} km from ${landingOf(state.draftLanding).name}`;
+    $("#tasks-summary").innerHTML = `<strong>${picked.length}</strong> task${picked.length > 1 ? "s" : ""} · ${returnOf(picked)} · ${Math.floor(mins / 60) ? Math.floor(mins / 60) + " h " : ""}${mins % 60} min on site · farthest stop ${far.toFixed(1)} km from ${landingOf(state.draftLanding).name}`;
   }
   function openTasks() {
     const again = state.planned;
@@ -1279,7 +1296,7 @@
     highlights.push(h);
     saveHighlights();
     const run = state.run;
-    if (run) { run.science += 10; run.photos = (run.photos || 0) + 1; run.log.push(`Left a ${TAGS[tag].label.toLowerCase()} photo point: ${title} (+10 pts)`); renderChecklist(); }
+    if (run) { run.photos = (run.photos || 0) + 1; run.log.push(`Left a ${TAGS[tag].label.toLowerCase()} photo point: ${title}`); renderChecklist(); }
     $("#photo-count").textContent = `${run ? run.photos : 0} photo points logged on this EVA.`;
     if (tag === "hazard") { applyCrewHazards(); for (const m of D.missions) planMission(m); }
     buildMarkers();

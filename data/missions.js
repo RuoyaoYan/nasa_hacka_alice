@@ -91,6 +91,8 @@
       easiest: { label: "Easiest", note: "Least climbing and soft sand, even if a little longer", color: "#8A4FE0", maxSlope: 9, steep: 14, sand: 9, rock: Infinity, bonus: false }
     },
 
+    // Every task the crew can pick today. "points" is an internal priority weight
+    // (shown as High, Medium or Low priority); the highest picked task becomes the main task.
     // Every task the crew can pick today. "today: true" marks the five everyday
     // choices shown first; the others sit farther out.
     tasks: [

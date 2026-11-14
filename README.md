@@ -59,8 +59,9 @@ deploy from branch) and share the link.
    map and in *Crew photo points*, and hazard reports make future routes keep clear.
 5. **React**: events pause the walk and ask for a decision. Returning early,
    sheltering, or pushing on all have costs.
-6. **Score**: science points, plus a safety bonus if you get home with more than
-   30 % oxygen.
+6. **EVA report**: tasks done, the science return (core samples, image sets,
+   measurements, panoramas), life support left, EVA time and radiation dose. No
+   points: each task has a High, Medium or Low priority instead.
 
 ### Route details, as in Komoot
 
