@@ -149,7 +149,7 @@
 
   // SVG overlay groups
   const gHaz = svg("g", {}, map.svg);
-  const hazImg = Planner.hazardImage(D);
+  let hazImg = Planner.hazardImage(D);
   const hazEl = svg("image", { href: hazImg.url, preserveAspectRatio: "none", opacity: 0.6, style: "image-rendering: pixelated" }, gHaz);
   const gTraverse = svg("g", {}, map.svg);
   const gRoutes = svg("g", {}, map.svg);
@@ -842,6 +842,48 @@
       if (k === "s") collectSample();
     }
   });
+
+  // ---------- Real hazard data ----------
+  // 1) cost_matrix.json from tools/terrain_hazard (HiRISE DTM: slopes, craters, rocks), if present
+  // 2) live scan of the HiRISE tiles for shadows next to sunlit slopes
+  function replanAll(msg) {
+    hazImg = Planner.hazardImage(D);
+    hazEl.setAttribute("href", hazImg.url);
+    for (const m of D.missions) planMission(m);
+    if (!state.run) { renderPlan(); buildMarkers(); }
+    drawOverlays();
+    if (msg) setScanStatus(msg);
+  }
+  function setScanStatus(msg) { const n = $("#scan-info"); if (n) n.textContent = msg; }
+
+  function loadCostMatrix() {
+    return fetch("data/cost_matrix.json", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("none"))))
+      .then((doc) => {
+        const ll = doc.georef && doc.georef.latLonIfEquirectangular;
+        if (!ll || !doc.reasons) throw new Error("no lat/lon bounds");
+        const bits = new Uint8Array(doc.width * doc.height);
+        for (let r = 0; r < doc.height; r++) for (let c = 0; c < doc.width; c++) bits[r * doc.width + c] = doc.reasons[r][c] & 7; // slope, crater, rock (ignore no data)
+        const res = Planner.mergeMask(D, { width: doc.width, height: doc.height, bounds: [[ll.south, ll.west], [ll.north, ll.east]], bits }, 0.05);
+        return `HiRISE elevation hazards loaded: ${res.blocked.toLocaleString("en")} blocked cells (slopes ${doc.stats?.byReason?.["steep slope"] ?? "?"}, craters ${doc.stats?.craters ?? "?"}, rocks ${doc.stats?.rocks ?? "?"}).`;
+      });
+  }
+
+  function runScan() {
+    const Scan = window.MomootHazardScan;
+    if (!Scan) return;
+    setScanStatus("Scanning NASA HiRISE imagery for hazards…");
+    const layers = [L[HIRISE], L[CTX]].map((l) => ({ name: l.name, template: l.template }));
+    Scan.scan(D.planArea, layers, 12, (s) => setScanStatus(`Hazard scan: ${s}…`))
+      .then((res) => {
+        const m = Planner.mergeMask(D, res);
+        state.scan = res;
+        replanAll((state.cmMsg ? state.cmMsg + " " : "") + `Hazard scan of ${res.source} imagery found ${res.found.coarse} hills or crater walls and ${res.found.fine} boulders or small craters. ${m.blocked.toLocaleString("en")} cells are now blocked for safe routes, and all routes were re planned.`);
+      })
+      .catch(() => setScanStatus("Hazard scan unavailable: the browser could not read the NASA image pixels. Routes use the terrain model only."));
+  }
+
+  loadCostMatrix().then((msg) => { state.cmMsg = msg; replanAll(msg); }).catch(() => {}).finally(runScan);
 
   // ---------- Boot ----------
   $("#sol-label").textContent = `Sol ${D.sol}`;

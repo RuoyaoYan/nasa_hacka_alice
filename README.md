@@ -123,6 +123,48 @@ targets on or off in the panel, or click a faint **+** marker on the map, and al
 three are re-planned instantly. Terrain events (boulders, sand) fire where the
 chosen route actually enters those zones.
 
+## Real hazard detection
+
+Routes avoid dangers found in real NASA data, from two sources that feed the
+same cost grid:
+
+**1. Live scan of the HiRISE imagery (automatic).** `hazardscan.js` is a
+JavaScript port of the image detector in `tools/terrain_hazard/hazards.py`.
+When the game opens, it downloads the HiRISE tiles covering the planning area
+(about 10 m per pixel), finds compact **shadows** (black top-hat) and
+**sunlit faces** (white top-hat) as robust z-scores, and keeps only shadows
+that have a sunlit partner next to them. That pairing is what relief looks
+like from orbit, so it catches hills and buttes, crater walls, scarps and big
+boulders, while broad dark sand or dust patches are ignored. It runs at two
+scales (10 m and 30 m pixels) and also marks rough texture. Detected hazards
+are blocked for the Safest and Most science routes; Fastest may cross them
+with a heavy penalty, which triggers a terrain event. The panel reports what
+was found. If NASA's tile server does not allow the browser to read pixels,
+the game says so and keeps using the terrain model.
+
+**2. Elevation hazards from `tools/terrain_hazard` (optional, most accurate).**
+Run the Python tool on the USGS 1 m HiRISE DTM and 25 cm orthomosaic of
+Jezero for the Momoot planning area, then copy its `cost_matrix.json` into
+`data/`:
+
+```bash
+pip install -r tools/terrain_hazard/requirements.txt
+python3 tools/terrain_hazard/terrain_hazard.py \
+  --dem   JEZ_hirise_soc_006_DTM_MOLAtopography_DeltaGeoid_1m_Eqc_latTs0_lon0_blend40.tif \
+  --image JEZ_hirise_soc_006_orthoMosaic_25cm_Eqc_latTs0_lon0_first.tif \
+  --center-latlon 18.46 77.3775 --size 10500 6600 --cell 10 \
+  --origin-latlon 18.4385 77.4462 --out out/
+cp out/cost_matrix.json data/cost_matrix.json
+```
+
+The game loads it on start and merges every blocked cell (steep slope,
+crater, rock) into the route calculation, using the file's latitude and
+longitude bounds. Download links for both USGS files are in
+`tools/terrain_hazard/README.md`.
+
+The habitat and every target are always kept reachable, so a detection on top
+of a target never makes a mission impossible.
+
 ## Game rules
 
 Tours are driven in a pressurised crew rover, with a walking EVA at every stop.
@@ -151,6 +193,8 @@ index.html          layout: details column, map card, dialogs
 style.css           design tokens and components (square corners throughout)
 marsmap.js          small slippy map engine for NASA Mars Trek tiles
 planner.js          terrain cost map, Dijkstra, DFS visiting order, smoothing
+hazardscan.js       live hazard detection on HiRISE tiles (port of hazards.py)
+tools/terrain_hazard/  Python hazard grid from the HiRISE DTM and orthoimage
 app.js              planning, route overlays, EVA loop, events, scoring
 data/missions.js    missions, routes, stops, events, terrain
 assets/fonts/       Poppins (SIL Open Font License)

@@ -54,6 +54,7 @@
     const rows = Math.ceil((n - s) / dLat), cols = Math.ceil((e - w) / dLon);
     const N = rows * cols;
     const elev = new Float32Array(N), slope = new Float32Array(N), sand = new Float32Array(N), rock = new Uint8Array(N);
+    const ext = new Uint8Array(N); // hazards from real data: 1 slope, 2 crater, 4 rock (terrain_hazard tool), 32 relief, 64 rough (HiRISE scan)
     const elevAt = makeElevation(T);
     const kmTo = (a, b) => Math.hypot((a[0] - b[0]) * KM_PER_DEG, (a[1] - b[1]) * KM_PER_DEG * kLon);
     const ll = (r, c) => [n - (r + 0.5) * dLat, w + (c + 0.5) * dLon];
@@ -74,17 +75,65 @@
       const ey = (elev[Math.min(rows - 1, r + 1) * cols + c] - elev[Math.max(0, r - 1) * cols + c]) / (2 * cellKm * 1000);
       slope[i] = (Math.atan(Math.hypot(ex, ey)) * 180) / Math.PI;
     }
-    return { rows, cols, N, s, w, n, e, dLat, dLon, cellKm, elev, slope, sand, rock, ll, elevAt, kmTo,
+    return { rows, cols, N, s, w, n, e, dLat, dLon, cellKm, elev, slope, sand, rock, ext, ll, elevAt, kmTo,
       cellOf: (p) => clamp(Math.floor((n - p[0]) / dLat), 0, rows - 1) * cols + clamp(Math.floor((p[1] - w) / dLon), 0, cols - 1) };
   }
 
   // Cost to enter a cell, per km, for a given risk profile
+  const BLOCK_BITS = 1 | 2 | 4 | 32; // slope, crater, rock, relief seen in imagery
   function cellCost(G, i, W) {
     const sl = G.slope[i];
     if (sl > W.maxSlope) return Infinity;
     if (G.rock[i] && W.rock === Infinity) return Infinity;
+    const x = G.ext[i];
+    if (x & BLOCK_BITS) {
+      if (W.rock === Infinity) return Infinity;   // safe profiles never enter detected hazards
+    }
     const steep = clamp((sl - 5) / 10, 0, 1.5);
-    return 1 + W.steep * steep + W.sand * G.sand[i] + (G.rock[i] ? W.rock : 0);
+    let c = 1 + W.steep * steep + W.sand * G.sand[i] + (G.rock[i] ? W.rock : 0);
+    if (x & BLOCK_BITS) c += 3;                    // fastest profile pays a big penalty instead
+    if (x & 64) c += 0.4 + (W.rock === Infinity ? 0.6 : 0.2); // rough ground is slower
+    return c;
+  }
+
+  // Merge a hazard mask (any resolution, lat/lon bounds) into the grid.
+  // A planner cell takes a bit when more than `frac` of its pixels carry it.
+  function mergeMask(D, m, frac = 0.12) {
+    if (!G) G = buildGrid(D);
+    const [[ms, mw], [mn, me]] = m.bounds;
+    const tot = new Uint32Array(G.N), hits = {};
+    const bitList = [1, 2, 4, 32, 64];
+    for (const b of bitList) hits[b] = new Uint32Array(G.N);
+    for (let y = 0; y < m.height; y++) {
+      const lat = mn - ((y + 0.5) / m.height) * (mn - ms);
+      if (lat > G.n || lat < G.s) continue;
+      const r = Math.floor((G.n - lat) / G.dLat);
+      for (let x = 0; x < m.width; x++) {
+        const lon = mw + ((x + 0.5) / m.width) * (me - mw);
+        if (lon < G.w || lon > G.e) continue;
+        const c = Math.floor((lon - G.w) / G.dLon);
+        if (r < 0 || c < 0 || r >= G.rows || c >= G.cols) continue;
+        const i = r * G.cols + c, v = m.bits[y * m.width + x];
+        tot[i]++;
+        for (const b of bitList) if (v & b) hits[b][i]++;
+      }
+    }
+    // the habitat and every target must stay reachable: clear hazards within ~75 m of them
+    const keep = [D.habitat.pos, ...D.missions.flatMap((ms) => ms.objectives.map((ob) => ob.pos))];
+    for (const pt of keep) {
+      const c0 = G.cellOf(pt), r0 = (c0 / G.cols) | 0, k0 = c0 % G.cols;
+      for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+        const rr = r0 + dr, cc = k0 + dc;
+        if (rr >= 0 && cc >= 0 && rr < G.rows && cc < G.cols) { const i = rr * G.cols + cc; hits[1][i] = hits[2][i] = hits[4][i] = hits[32][i] = 0; G.ext[i] &= ~BLOCK_BITS; }
+      }
+    }
+    let blocked = 0;
+    for (let i = 0; i < G.N; i++) {
+      if (!tot[i]) continue;
+      for (const b of bitList) if (hits[b][i] / tot[i] > (b === 64 ? 0.3 : frac)) G.ext[i] |= b;
+      if (G.ext[i] & BLOCK_BITS) blocked++;
+    }
+    return { blocked, cells: G.N };
   }
 
   // ---------- Dijkstra (binary heap) from one cell to all cells ----------
@@ -246,7 +295,7 @@
     for (let i = 1; i < line.length; i++) {
       const d = cum[i] - cum[i - 1];
       const c = G.cellOf(line[i]);
-      const sd = G.sand[c] > 0.35, rk = G.rock[c] === 1, st = G.slope[c] > 12;
+      const sd = G.sand[c] > 0.35, rk = G.rock[c] === 1 || (G.ext[c] & BLOCK_BITS) > 0, st = G.slope[c] > 12;
       if (sd) sandKm += d; else if (rk) rockKm += d; else firmKm += d;
       if (st) steepKm += d;
       if (sd && !inSand) hazards.push({ type: "sand", km: cum[i], end: cum[i] });
@@ -270,14 +319,16 @@
     const ctx = cv.getContext("2d"), img = ctx.createImageData(G.cols, G.rows);
     for (let i = 0; i < G.N; i++) {
       let r = 0, g = 0, b = 0, a = 0;
-      if (G.slope[i] > 12) { r = 214; g = 58; b = 44; a = clamp((G.slope[i] - 12) * 22, 70, 150); }
+      if (G.ext[i] & BLOCK_BITS) { r = 200; g = 20; b = 90; a = 170; }
+      else if (G.slope[i] > 12) { r = 214; g = 58; b = 44; a = clamp((G.slope[i] - 12) * 22, 70, 150); }
       else if (G.rock[i]) { r = 245; g = 180; b = 0; a = 120; }
       else if (G.sand[i] > 0.35) { r = 255; g = 236; b = 170; a = 90; }
+      else if (G.ext[i] & 64) { r = 120; g = 90; b = 200; a = 55; }
       img.data.set([r, g, b, a], i * 4);
     }
     ctx.putImageData(img, 0, 0);
-    return { url: cv.toDataURL(), bounds: [[G.s, G.w], [G.n, G.e]] };
+    return { url: cv.toDataURL(), bounds: [[G.n - G.rows * G.dLat, G.w], [G.n, G.w + G.cols * G.dLon]] };
   }
 
-  window.MomootPlanner = { plan, analyse, hazardImage, grid: () => G };
+  window.MomootPlanner = { plan, analyse, hazardImage, mergeMask, grid: () => G, init: (D) => { if (!G) G = buildGrid(D); return G; } };
 })();
