@@ -5,6 +5,8 @@
   "use strict";
 
   const D = window.MOMOOT_DATA;
+  // Start planning must always close the intro, even if something below fails
+  document.getElementById("btn-intro").addEventListener("click", () => { document.getElementById("intro").hidden = true; document.body.dataset.screen = "plan"; });
   const MarsMap = window.MarsMap;
   const SVGNS = "http://www.w3.org/2000/svg";
   const $ = (sel) => document.querySelector(sel);

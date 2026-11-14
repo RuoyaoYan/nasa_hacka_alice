@@ -182,7 +182,7 @@ body:not([data-screen="eva"]):not([data-screen="event"]):not([data-screen="end"]
 .start-meta { display: flex; flex-direction: column; gap: var(--s-50); min-width: 120px; }
 .risk { display: flex; gap: var(--s-50); }
 .risk span { width: 32px; height: 8px; background: var(--surface-2); transition: background-color var(--t-color) var(--ease); }
-.start-bar .btn { flex: 1; padding-top: var(--s-100); padding-bottom: var(--s-100); }
+.start-bar .btn { flex: 1; }
 
 /* ---------- EVA column ---------- */
 .eva-head { display: flex; justify-content: space-between; align-items: flex-end; gap: var(--s-200); }
@@ -275,8 +275,8 @@ body:not([data-screen="eva"]):not([data-screen="event"]):not([data-screen="end"]
 .modal { width: 100%; max-width: 560px; max-height: calc(100vh - 48px); overflow: auto; background: var(--surface); border: 1px solid var(--line-strong); padding: var(--s-400); transition: transform var(--t-move) var(--ease); box-shadow: 0 16px 48px rgba(0,0,0,0.25); }
 .modal > * + * { margin-top: var(--s-100); }
 .row-between { display: flex; justify-content: space-between; align-items: center; gap: var(--s-200); }
-.intro-steps { display: flex; gap: var(--s-75); flex-wrap: wrap; margin: var(--s-200) 0 var(--s-300) !important; }
-.intro-steps li { display: inline-flex; align-items: center; gap: var(--s-75); padding: var(--s-75) var(--s-100); background: var(--bg); border: 1px solid var(--line); color: var(--text-2); }
+.intro-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s-75); margin: var(--s-200) 0 var(--s-300) !important; }
+.intro-steps li { display: flex; align-items: center; gap: var(--s-75); padding: var(--s-75) var(--s-100); background: var(--bg); border: 1px solid var(--line); color: var(--text-2); }
 .intro-steps i { color: var(--accent); font-size: 18px; }
 
 .event { border-top: 4px solid var(--warn); }
@@ -342,3 +342,10 @@ body:not([data-screen="eva"]):not([data-screen="event"]):not([data-screen="end"]
 .pin.off { width: 22px; height: 22px; background: rgba(255,255,255,0.85); color: var(--text); border: 2px dashed var(--text); font-size: 14px; }
 .mm-marker.clickable { pointer-events: auto; cursor: pointer; }
 .mm-marker.clickable:hover .pin.off { background: #FFFFFF; }
+
+/* Startup error and map loading states */
+.boot-error { position: fixed; left: 50%; top: 88px; transform: translateX(-50%); z-index: 70; max-width: 640px; background: var(--surface); border: 1px solid var(--bad); color: var(--bad); padding: var(--s-100) var(--s-200); }
+.boot-error[hidden] { display: none; }
+.boot-error code { display: block; margin-top: var(--s-50); color: var(--text-2); font-size: 12px; line-height: 16px; }
+.map-card::before { content: "Loading NASA Mars Trek imagery"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.6); font-size: 14px; line-height: 20px; }
+.risk span { background: var(--line-strong); }
