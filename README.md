@@ -92,13 +92,25 @@ drawn illustration.
 
 ## Game rules
 
-These are simple game rules, **not real spacesuit figures**:
+Tours are driven in a pressurised crew rover, with a walking EVA at every stop.
+These are simple game rules, **not real mission figures**:
 
-- Walking speed 2 km/h on firm ground, up to 60 % slower on sand
-- Oxygen: 7 % per km walked, plus 1 % per 10 m climbed
-- Every walk is a round trip back to the habitat
+- Rover speed 6 km/h on firm ground, up to 50 % slower on sand
+- Life support: 2 % per km, plus 1 % per 20 m climbed, plus 2 % per stop
+- 30 minutes per stop
 - Radiation background uses roughly the surface average Curiosity's RAD measured
   (about 0.64 mSv per day); event doses are game values
+
+## Missions
+
+| Mission | Difficulty | Tours | Passes |
+|---|---|---|---|
+| Delta front loop | Easy | 6 to 9 km | Hawksbill Gap, Three Forks depot, Séítah, Kodiak |
+| Climb to Belva crater | Moderate | 11 to 14 km | Upper fan, Enchanted Lake, landing site |
+| Crater rim expedition | Hard | 17 to 20 km | Lookout Hill, Neretva Vallis, Belva, Kodiak |
+
+Routes are smoothed through hand placed control points with a gentle organic
+wiggle, so they read like driven tracks. Landmark positions are approximate.
 
 ## Project structure
 

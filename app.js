@@ -11,13 +11,15 @@
 
   // ---------- Game rules ----------
   const RULES = {
-    speedKmh: 2,
-    sandSlowdown: 0.6,
-    o2PerKm: 7,
-    o2Per10mClimb: 1,
-    suitPerKm: 4,
+    speedKmh: 6,            // pressurised rover on firm ground
+    sandSlowdown: 0.5,      // 100 % sand would be 50 % slower
+    o2PerKm: 2,             // life support % per km
+    o2Per20mClimb: 1,       // life support % per 20 m climbed
+    stopO2: 2,              // walking EVA at each stop
+    stopMinutes: 30,
+    powerPerKm: 1,          // rover power % per km
     dosePerMinute: 0.00045, // mSv per minute, close to the surface average Curiosity's RAD measured
-    walkKmPerSec: 0.25,     // animation speed outbound
+    tourSeconds: 22,        // a whole tour plays in about this many seconds
     returnBoost: 2,
     fastForward: 3
   };
@@ -50,7 +52,7 @@
 
   // ---------- Route geometry ----------
   // Smooth the hand placed points (Catmull Rom), then measure along the Mars sphere.
-  function densify(pts, steps = 14) {
+  function densify(pts, steps = 40) {
     if (pts.length < 3) {
       const out = [];
       for (let i = 0; i <= steps; i++) { const t = i / steps; out.push([pts[0][0] + (pts[1][0] - pts[0][0]) * t, pts[0][1] + (pts[1][1] - pts[0][1]) * t]); }
@@ -67,18 +69,64 @@
     }
     return out;
   }
+  // Organic wiggle between control points so tours look driven, not ruled.
+  // Deterministic per route, zero at every control point so landmarks stay put.
+  function meander(dense, steps, seed) {
+    const k = Math.cos((18.44 * Math.PI) / 180);
+    let s = seed * 7.13, dist = 0;
+    const out = dense.map((p) => p.slice());
+    for (let i = 1; i < dense.length - 1; i++) {
+      const a = dense[i - 1], b = dense[i + 1];
+      const dx = (b[1] - a[1]) * k, dy = b[0] - a[0];
+      const len = Math.hypot(dx, dy) || 1;
+      dist += Math.hypot((dense[i][1] - a[1]) * k, dense[i][0] - a[0]) * 59.3;
+      const segIdx = Math.floor(i / steps), t = (i % steps) / steps;
+      const c0 = dense[segIdx * steps], c1 = dense[Math.min(dense.length - 1, (segIdx + 1) * steps)];
+      const segDeg = Math.hypot((c1[1] - c0[1]) * k, c1[0] - c0[0]);
+      const amp = Math.min(0.0011, segDeg * 0.14) * Math.sin(Math.PI * t);
+      const n = 0.6 * Math.sin(dist * 7.0 + s) + 0.3 * Math.sin(dist * 17.9 + s * 1.7) + 0.1 * Math.sin(dist * 52.0 + s * 2.3);
+      out[i][0] += (dx / len) * amp * n;
+      out[i][1] += (-dy / len) * amp * n / k;
+    }
+    return out;
+  }
+  function nearestIdx(r, pos) {
+    let best = 0, bd = Infinity;
+    for (let i = 0; i < r.dense.length; i++) {
+      const d = MarsMap.distanceKm(r.dense[i], pos);
+      if (d < 0.03) return i;
+      if (d < bd) { bd = d; best = i; }
+    }
+    return best;
+  }
   for (const m of D.missions) {
-    for (const r of m.routes) {
-      r.dense = densify(r.points);
+    for (const [ri, r] of m.routes.entries()) {
+      r.dense = meander(densify(r.points), 40, ri + m.id.length);
       r.cum = [0];
       for (let i = 1; i < r.dense.length; i++) r.cum.push(r.cum[i - 1] + MarsMap.distanceKm(r.dense[i - 1], r.dense[i]));
       r.km = r.cum[r.cum.length - 1];
+      // stops: place each on the route, then the mission target
+      r.stops.forEach((s) => { s.at = s.pos ? r.cum[nearestIdx(r, s.pos)] / r.km : s.at; });
+      const tAt = r.cum[nearestIdx(r, m.target.pos)] / r.km;
+      r.allStops = [...r.stops.map((s, i) => ({ ...s, key: `stop${i}` })), { ...m.finalStop, at: tAt, key: "target", target: true }].sort((x, y) => x.at - y.at);
       const sandF = 1 + (r.terrain.sand / 100) * RULES.sandSlowdown;
       r.minPerKm = (60 / RULES.speedKmh) * sandF;
-      r.roundKm = r.km * 2;
-      r.roundMinutes = r.roundKm * r.minPerKm;
-      r.o2Round = Math.round(r.roundKm * RULES.o2PerKm + (r.climb / 10) * RULES.o2Per10mClimb);
+      r.totalMinutes = r.km * r.minPerKm + r.allStops.length * RULES.stopMinutes;
+      r.o2Total = Math.round(r.km * RULES.o2PerKm + (r.climb / 20) * RULES.o2Per20mClimb + r.allStops.length * RULES.stopO2);
+      r.profile = makeProfile(r, tAt, ri);
     }
+  }
+  // Elevation along the tour: rises toward the target, falls on the way home, with terrain texture
+  function makeProfile(r, tAt, seed) {
+    const n = 48, out = [];
+    for (let i = 0; i < n; i++) {
+      const t = i / (n - 1);
+      const base = t <= tAt ? Math.pow(t / tAt, 1.3) : Math.pow((1 - t) / (1 - tAt), 1.1);
+      const tex = 0.06 * Math.sin(t * 23 + seed) + 0.04 * Math.sin(t * 61 + seed * 2);
+      out.push(Math.max(0, r.climb * (base + tex * Math.sin(Math.PI * t))));
+    }
+    const mx = Math.max(...out) || 1;
+    return out.map((v) => (v / mx) * r.climb);
   }
   function pointAtKm(r, km) {
     km = clamp(km, 0, r.km);
@@ -244,7 +292,8 @@
         }
       }
     }
-    r.stops.forEach((s, i) => list.push({ pos: pointAt(r, s.at), el: pinEl("stop", String(i + 1), s.name, null, r.color) }));
+    let sn = 0;
+    r.allStops.forEach((s) => { if (!s.target) list.push({ pos: pointAt(r, s.at), el: pinEl("stop", String(++sn), s.name, null, r.color) }); });
     list.push({ pos: D.habitat.pos, el: pinEl("", "A", "Habitat") });
     list.push({ pos: m.target.pos, el: pinEl("target", "B", m.target.name, state.showHazards ? m.target.dataNote : null) });
     state.playerMarker = null;
@@ -367,7 +416,7 @@
       const t = html("span", { class: "t" });
       t.append(html("span", { class: "title-3" }, rt.label), html("span", { class: "caption-5 muted" }, rt.note));
       const rr = html("span", { class: "r" });
-      rr.append(html("span", { class: "title-4" }, `${rt.roundKm.toFixed(1)} km`), html("span", { class: "caption-5 muted" }, fmtMin(rt.roundMinutes)));
+      rr.append(html("span", { class: "title-4" }, `${rt.km.toFixed(1)} km`), html("span", { class: "caption-5 muted" }, fmtMin(rt.totalMinutes)));
       b.append(sw, t, rr);
       b.addEventListener("click", () => selectRoute(i));
       list.append(b);
@@ -375,10 +424,10 @@
 
     const stats = $("#route-stats"); stats.innerHTML = "";
     const add = (dd, dt) => { const d = html("div"); d.append(html("dd", { class: "heading-6" }, dd), html("dt", { class: "caption-5" }, dt)); stats.append(d); };
-    add(fmtMin(r.roundMinutes), "Duration");
-    add(`${r.roundKm.toFixed(1)} km`, "Round trip");
+    add(fmtMin(r.totalMinutes), "Duration");
+    add(`${r.km.toFixed(1)} km`, "Distance");
     add(`↑ ${r.climb} m`, "Climb");
-    add(`${r.o2Round} %`, "Oxygen used");
+    add(`${r.o2Total} %`, "Life support");
 
     renderProfile(r, m);
 
@@ -401,7 +450,8 @@
     const s = $("#route-profile"); s.innerHTML = "";
     const W = 480, H = 120, l = 48, rr = 12, t = 12, b = 28;
     const maxC = Math.max(...m.routes.map((x) => x.climb), 10);
-    const top = Math.ceil(maxC / 10) * 10;
+    const top0 = maxC > 200 ? 100 : 10;
+    const top = Math.ceil(maxC / top0) * top0;
     const X = (i) => l + (i / (r.profile.length - 1)) * (W - l - rr);
     const Y = (v) => t + (1 - v / top) * (H - t - b);
     for (const v of [0, top / 2, top]) {
@@ -418,9 +468,14 @@
   function renderWaypoints(r, m) {
     const ol = $("#waypoints"); ol.innerHTML = "";
     ol.style.setProperty("--route-color", r.color);
-    const items = [{ badge: "A", cls: "", name: "Habitat", km: 0, pos: D.habitat.pos, sub: "Start and finish of every EVA" }];
-    r.stops.forEach((s, i) => items.push({ badge: String(i + 1), cls: "stop", name: s.name, km: s.at * r.km, pos: pointAt(r, s.at), sub: s.detail, photo: s.photo }));
-    items.push({ badge: "B", cls: "target", name: m.finalStop.name, km: r.km, pos: m.target.pos, sub: m.finalStop.detail, photo: m.finalStop.photo });
+    const items = [{ badge: "A", cls: "", name: "Habitat", km: 0, pos: D.habitat.pos, sub: "Board the rover and head out" }];
+    let n = 0;
+    for (const s of r.allStops) {
+      items.push(s.target
+        ? { badge: "B", cls: "target", name: s.name, km: s.at * r.km, pos: m.target.pos, sub: s.detail, photo: s.photo }
+        : { badge: String(++n), cls: "stop", name: s.name, km: s.at * r.km, pos: pointAt(r, s.at), sub: s.detail, photo: s.photo });
+    }
+    items.push({ badge: "A", cls: "", name: "Back at the habitat", km: r.km, pos: D.habitat.pos, sub: "Tour complete" });
     for (const it of items) {
       const li = html("li", { class: "wp" });
       li.append(html("span", { class: `wp-badge ${it.cls}`, "aria-hidden": "true" }, it.badge));
@@ -461,10 +516,10 @@
     state.run = {
       m, r, km: 0, dir: 1, maxKm: 0,
       o2: 100, suit: 100, dose: 0, minutes: 0, walked: 0,
-      science: 0, stopIdx: 0, eventIdx: 0, paused: false, fast: false,
+      science: 0, stopIdx: 0, eventIdx: 0, paused: false, fast: false, kmPerSec: r.km / RULES.tourSeconds,
       atStop: null, returnedEarly: false, rescued: false, lowWarned: false,
       done: new Set(["leave"]), skipped: new Set(),
-      log: [`Left the habitat on the ${r.label.toLowerCase()} route`]
+      log: [`Left the habitat in the rover on the ${r.label.toLowerCase()} route`]
     };
     $("#stop-card").hidden = true;
     buildMarkers();
@@ -479,8 +534,8 @@
     const run = state.run;
     $("#obj-mission").textContent = run.m.name;
     const items = [{ key: "leave", label: "Leave the habitat" }];
-    run.r.stops.forEach((s, i) => items.push({ key: `stop${i}`, label: s.name }));
-    items.push({ key: "target", label: run.m.finalStop.name }, { key: "home", label: "Return to the habitat" });
+    run.r.allStops.forEach((s) => items.push({ key: s.key, label: s.target ? `${s.name} (target)` : s.name }));
+    items.push({ key: "home", label: "Return to the habitat" });
     const ol = $("#obj-list"); ol.innerHTML = "";
     let nowSet = false;
     for (const it of items) {
@@ -491,7 +546,7 @@
       li.append(box, html("span", {}, it.label));
       ol.append(li);
     }
-    const possible = run.r.stops.reduce((a, s) => a + s.points, 0) + run.m.finalStop.points;
+    const possible = run.r.allStops.reduce((a, s) => a + s.points, 0);
     $("#obj-points").textContent = `Science ${run.science} of ${possible} pts`;
   }
 
@@ -508,29 +563,29 @@
 
   function step(dt) {
     const run = state.run, r = run.r;
-    const speed = RULES.walkKmPerSec * (run.dir < 0 ? RULES.returnBoost : 1) * (run.fast ? RULES.fastForward : 1);
+    const speed = run.kmPerSec * (run.dir < 0 ? RULES.returnBoost : 1) * (run.fast ? RULES.fastForward : 1);
     const prev = run.km;
     run.km = clamp(run.km + run.dir * speed * dt, 0, r.km);
     const dk = Math.abs(run.km - prev);
     const mins = dk * r.minPerKm;
     run.walked += dk; run.minutes += mins;
     run.o2 -= dk * RULES.o2PerKm;
-    if (run.dir > 0) run.o2 -= (dk / r.km) * (r.climb / 10) * RULES.o2Per10mClimb;
-    run.suit -= dk * RULES.suitPerKm;
+    if (run.dir > 0) run.o2 -= (dk / r.km) * (r.climb / 20) * RULES.o2Per20mClimb;
+    run.suit -= dk * RULES.powerPerKm;
     run.dose += mins * RULES.dosePerMinute;
 
-    if (run.o2 <= 0) { run.o2 = 0; run.rescued = true; run.log.push("Oxygen ran out. The crew rover came to pick you up"); return finish(); }
-    if (!run.lowWarned && run.dir > 0 && run.o2 - run.km * RULES.o2PerKm < 12) {
+    if (run.o2 <= 0) { run.o2 = 0; run.rescued = true; run.log.push("Life support ran out. A rescue rover came from the habitat"); return finish(); }
+    if (!run.lowWarned && run.dir > 0 && run.o2 - Math.min(r.km - run.km, run.km) * RULES.o2PerKm < 10) {
       run.lowWarned = true;
-      toast("Oxygen reserve is getting low. Make sure you can still get home.");
+      toast("Life support reserve is getting low. Make sure you can still get home.");
     }
     if (run.dir > 0) {
       const frac = run.km / r.km;
       const ev = r.events[run.eventIdx];
       if (ev && frac >= ev.at) { run.eventIdx++; return openEvent(ev.type); }
-      const st = r.stops[run.stopIdx];
-      if (st && frac >= st.at) { run.stopIdx++; return arriveStop(st, `stop${run.stopIdx - 1}`); }
-      if (frac >= 1) return arriveStop(run.m.finalStop, "target");
+      const st = r.allStops[run.stopIdx];
+      if (st && frac >= st.at) { run.stopIdx++; return arriveStop(st, st.key); }
+      if (frac >= 1) { run.done.add("home"); run.log.push("Back inside the habitat"); return finish(); }
     } else if (run.km <= 0) {
       run.done.add("home"); run.log.push("Back inside the habitat");
       return finish();
@@ -581,11 +636,11 @@
     const run = state.run; if (!run || !run.atStop) return;
     const { stop, key } = run.atStop;
     run.science += stop.points; run.done.add(key);
-    run.minutes += 20; run.o2 -= 2; run.dose += 20 * RULES.dosePerMinute;
+    run.minutes += RULES.stopMinutes; run.o2 -= RULES.stopO2; run.dose += RULES.stopMinutes * RULES.dosePerMinute;
     run.log.push(`Collected a sample at ${stop.name} (+${stop.points} pts)`);
     run.atStop = null;
     $("#stop-card").hidden = true;
-    if (key === "target") { run.dir = -1; run.maxKm = run.km; run.log.push("Turned back toward the habitat"); }
+    if (key === "target") run.log.push("Mission target done, heading home");
     renderChecklist();
   }
 
@@ -658,14 +713,13 @@
     run.log.push(`${ev.title}: ${c.label.toLowerCase()}`);
     if (e.returnNow) {
       run.dir = -1; run.maxKm = run.km; run.returnedEarly = true;
-      run.r.stops.forEach((s, k) => { if (!run.done.has(`stop${k}`)) run.skipped.add(`stop${k}`); });
-      run.skipped.add("target");
+      run.r.allStops.forEach((s) => { if (!run.done.has(s.key)) run.skipped.add(s.key); });
       run.returnPath = slice(run.r, 0, run.km).reverse();
       renderChecklist();
     }
     if (type === "dust") setTimeout(() => setCond("#cond-dust", "Low", "good"), 4000);
     if (type === "radiation") setTimeout(() => setCond("#cond-rad", "Normal", "good"), 4000);
-    if (run.o2 <= 0) { run.o2 = 0; run.rescued = true; run.log.push("Oxygen ran out. The crew rover came to pick you up"); return finish(); }
+    if (run.o2 <= 0) { run.o2 = 0; run.rescued = true; run.log.push("Life support ran out. A rescue rover came from the habitat"); return finish(); }
     setScreen("eva");
     last = performance.now();
   }
@@ -677,10 +731,10 @@
     const run = state.run;
     const bonus = !run.rescued && run.o2 > 30 ? 50 : 0;
     let score = run.science + bonus, title, text;
-    if (run.rescued) { score = Math.max(0, run.science - 100); title = "Rescued by the crew rover"; text = "You ran out of oxygen before reaching the habitat. On Mars, the walk home is part of the mission."; }
+    if (run.rescued) { score = Math.max(0, run.science - 100); title = "Rescued"; text = "Life support ran out before you reached the habitat. On Mars, the way home is part of the mission."; }
     else if (run.returnedEarly) { title = "Safe call"; text = "You turned back before conditions got worse. No sample is worth a crew member."; }
-    else if (run.o2 > 30) { title = "Safe explorer"; text = "Mission complete with a healthy oxygen reserve. That earns a +50 pts safety bonus."; }
-    else { title = "Bold scientist"; text = "Mission complete, but your oxygen reserve was thin. Next time, pick a route with more margin."; }
+    else if (run.o2 > 30) { title = "Safe explorer"; text = "Tour complete with a healthy life support reserve. That earns a +50 pts safety bonus."; }
+    else { title = "Bold scientist"; text = "Tour complete, but your life support reserve was thin. Next time, pick a route with more margin."; }
     state.totalScore += score;
     $("#score-total").textContent = state.totalScore;
     $("#end-kicker").textContent = run.rescued ? "EVA ended" : "EVA complete";
@@ -688,7 +742,7 @@
     $("#end-text").textContent = text;
     const stats = $("#end-stats"); stats.innerHTML = "";
     const add = (dd, dt) => { const d = html("div"); d.append(html("dd", { class: "heading-6" }, dd), html("dt", { class: "caption-5" }, dt)); stats.append(d); };
-    add(`${score}`, "Science pts"); add(`${Math.max(0, run.o2).toFixed(0)} %`, "Oxygen left"); add(fmtClock(run.minutes), "EVA time"); add(run.dose.toFixed(2), "Dose, mSv");
+    add(`${score}`, "Science pts"); add(`${Math.max(0, run.o2).toFixed(0)} %`, "Life support left"); add(fmtClock(run.minutes), "EVA time"); add(run.dose.toFixed(2), "Dose, mSv");
     const log = $("#end-log"); log.innerHTML = "";
     for (const l of run.log) log.append(html("li", {}, l));
     setScreen("end");

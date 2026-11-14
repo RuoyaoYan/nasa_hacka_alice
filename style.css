@@ -34,6 +34,7 @@
   --t-move: 500ms;
   --t-color: 300ms;
   --nav-h: 64px;
+  --radius: 8px;          /* one shared radius, used only for the logo and the top bar */
   --side-w: 480px;
 }
 
@@ -92,6 +93,8 @@ strong { font-weight: 600; }
 .btn-primary .key { border-color: transparent; color: var(--accent-press); }
 
 /* ---------- Nav ---------- */
+/* The only rounded elements: logo and the top bar row, all with the same radius */
+.nav .logo, .nav .chip, .nav .btn, .nav .score { border-radius: var(--radius) !important; }
 .nav { height: var(--nav-h); display: flex; align-items: center; gap: var(--s-200); padding: 0 var(--s-300); background: var(--bg); border-bottom: 1px solid var(--line); }
 .brand { display: flex; align-items: center; gap: var(--s-75); }
 .logo { width: 32px; height: 32px; background: var(--accent); position: relative; }
@@ -103,7 +106,7 @@ strong { font-weight: 600; }
 .chip strong.warn { color: var(--warn); }
 .chip i { font-size: 16px; }
 .spacer { flex: 1; }
-.score { color: var(--text-2); display: flex; align-items: baseline; gap: var(--s-75); }
+.score { color: var(--text-2); display: flex; align-items: baseline; gap: var(--s-75); padding: var(--s-50) var(--s-100); background: var(--surface); border: 1px solid var(--line); }
 .score strong { color: var(--accent); }
 
 /* ---------- App layout ---------- */
