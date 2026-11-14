@@ -267,6 +267,14 @@
 
   map.on("render", drawOverlays);
 
+  // Deep link to the same view in NASA Mars Trek (same projection as Trek's own URLs)
+  function updateTrekLink() {
+    const c = map.center;
+    const hash = `v=0.1&x=${c.lon.toFixed(5)}&y=${c.lat.toFixed(5)}&z=${Math.round(map.zoom)}&p=urn%3Aogc%3Adef%3Acrs%3AEPSG%3A%3A104905&d=&locale=&b=mars&e=&sfz=&w=`;
+    $("#lnk-trek").href = `https://trek.nasa.gov/mars/#${hash}`;
+  }
+  map.on("render", updateTrekLink);
+
   // Cursor coordinates
   $("#map").addEventListener("pointermove", (e) => {
     const rc = $("#map").getBoundingClientRect();

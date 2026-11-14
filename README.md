@@ -78,7 +78,7 @@ Higher resolution layers fade in as you zoom:
 
 Drag to pan, scroll or use **+ / −** to zoom, and use the layers button to
 switch base maps or show Perseverance's real path (loaded from NASA JPL if its
-server allows it). An internet connection is needed for the tiles.
+server allows it). An internet connection is needed for the tiles. The **Open in Mars Trek** button opens the current view in NASA Mars Trek, where you can use its own distance, elevation profile and slope tools to check a route.
 
 **Positions.** The habitat, mission targets and routes are placed approximately
 for gameplay; the Octavia E. Butler Landing marker is Perseverance's real landing

@@ -253,6 +253,7 @@ body:not([data-screen="eva"]):not([data-screen="event"]):not([data-screen="end"]
 .opt { display: flex; align-items: flex-start; gap: var(--s-75); cursor: pointer; }
 .opt input { margin-top: 3px; accent-color: var(--accent); }
 .ctl-full { top: var(--s-200); right: var(--s-200); }
+.ctl-trek { top: var(--s-200); right: 72px; text-decoration: none; }
 .ctl-zoom { right: var(--s-200); bottom: var(--s-600); display: flex; flex-direction: column; }
 .ctl-zoom .ctl-btn + .ctl-btn { border-top: 0; }
 .ctl-zoom #btn-fit { margin-top: var(--s-75); border-top: 1px solid var(--line-strong); }
