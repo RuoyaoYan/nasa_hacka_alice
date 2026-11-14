@@ -17,30 +17,30 @@
 (() => {
   const P = {
     habitat:    [18.4385, 77.4462],
-    landing:    [18.4447, 77.4508], // Octavia E. Butler Landing (real)
+    landing:    [18.4446, 77.4509], // Octavia E. Butler Landing, exact (NASA/JPL, Wikipedia)
     seitah:     [18.4262, 77.4208],
     seitahWest: [18.4292, 77.4098],
     kodiak:     [18.4318, 77.3905],
     threeForks: [18.4522, 77.4012],
     hawksbill:  [18.4642, 77.3992],
     enchanted:  [18.4598, 77.3918],
-    upperFan:   [18.4795, 77.3842],
+    upperFan:   [18.4740, 77.3900],
     isoHill:    [18.4752, 77.3648],
-    belva:      [18.4905, 77.3702],
+    belva:      [18.4800, 77.3800], // Belva crater centre, 0.9 km wide (USGS Gazetteer of Planetary Nomenclature)
     fanLobe:    [18.4968, 77.3528],
     neretva:    [18.4985, 77.3365],
     rimSlope:   [18.4602, 77.3168],
     lookout:    [18.4705, 77.3018],
     rimSouth:   [18.4545, 77.3052],
     // sightseeing viewpoints
-    belvaRim:   [18.4915, 77.3628],
+    belvaRim:   [18.4800, 77.3718], // Echo Creek, on Belva's west rim (where the sol 772 mosaic was taken)
     kodiakView: [18.4338, 77.4002],
     seitahSouth:[18.4120, 77.4195],
     neretvaView:[18.5085, 77.3455],
     rimSkyline: [18.4285, 77.3555],
     // other landing sites
     forksPlain: [18.4488, 77.4085],
-    fanCamp:    [18.4842, 77.3785],
+    fanCamp:    [18.4875, 77.3925],
     floorSouth: [18.3985, 77.4380]
   };
 

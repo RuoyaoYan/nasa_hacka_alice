@@ -1072,7 +1072,7 @@
     const km = habKm(t), [dc, dl] = distClass(km);
     const body = html("div", { class: "t-body" });
     const meta = html("p", { class: "t-meta caption-4" });
-    meta.innerHTML = `<span><strong>${priority(t)}</strong> priority</span><span><strong>${t.minutes}</strong> min on site</span><span>Returns <strong>1 ${PRODUCT[t.type][0]}</strong></span><span class="${dc}">${dl} · ${km.toFixed(1)} km</span>`;
+    meta.innerHTML = `<span><strong>${priority(t)}</strong> priority</span><span><strong>${t.minutes}</strong> min on site</span><span>Returns <strong>1 ${PRODUCT[t.type][0]}</strong></span><span class="t-dist ${dc}" data-id="${t.id}">${dl} · ${km.toFixed(1)} km</span>`;
     body.append(html("p", { class: "title-3" }, t.name), html("p", { class: "body-6 muted" }, t.detail), meta);
     lab.append(body);
     li.append(cb, lab);
@@ -1087,22 +1087,102 @@
     today.innerHTML = ""; far.innerHTML = ""; sight.innerHTML = "";
     for (const t of D.tasks) (t.group === "sight" ? sight : t.today ? today : far).append(taskCard(t));
     const nFar = D.tasks.filter((t) => !t.today && t.group !== "sight").length;
-    const land = $("#land-list"); land.innerHTML = "";
-    D.landingSites.forEach((s, i) => {
-      const b = html("button", { class: "land", type: "button", role: "radio", "aria-checked": String(s.id === state.draftLanding) });
-      const top = html("span", { class: "land-top" });
-      top.append(html("span", { class: "land-dot", "aria-hidden": "true" }, "A"), html("span", { class: "title-3" }, s.name));
-      b.append(top, html("span", { class: "body-6 muted" }, s.note));
-      b.addEventListener("click", () => { state.draftLanding = s.id; renderTaskPage(); document.querySelectorAll("#land-list .land")[i].focus({ preventScroll: true }); });
-      land.append(b);
-    });
+
     $("#btn-more-tasks span").textContent = far.hidden ? `Show ${nFar} tasks farther away` : "Hide tasks farther away";
     updateTaskSummary();
   }
+  // ---------- Live plan panel: best landing site, budget, best fit tasks ----------
+  const DETOUR = 1.3; // planned routes run ~30 % longer than the straight line
+  const PRIO_VALUE = { High: 3, Medium: 2, Low: 1 };
+  const RESERVE = 70; // keep 30 % life support in reserve
+  // shortest closed tour from start through all points (Held-Karp, exact for up to ~10 stops)
+  function tourKm(start, list) {
+    const n = list.length; if (!n) return 0;
+    const P = list.map((t) => t.pos), d0 = P.map((p) => MarsMap.distanceKm(start, p));
+    const dd = P.map((p) => P.map((q) => MarsMap.distanceKm(p, q)));
+    const FULL = 1 << n, dp = new Float64Array(FULL * n).fill(Infinity);
+    for (let i = 0; i < n; i++) dp[(1 << i) * n + i] = d0[i];
+    for (let m = 1; m < FULL; m++) for (let i = 0; i < n; i++) {
+      const v = dp[m * n + i]; if (v === Infinity || !(m & (1 << i))) continue;
+      for (let j = 0; j < n; j++) if (!(m & (1 << j))) { const k = (m | (1 << j)) * n + j, w = v + dd[i][j]; if (w < dp[k]) dp[k] = w; }
+    }
+    let best = Infinity; for (let i = 0; i < n; i++) best = Math.min(best, dp[(FULL - 1) * n + i] + d0[i]);
+    return best * DETOUR;
+  }
+  const lifeUse = (km, list) => km * RULES.o2PerKm + list.length * RULES.stopO2 + km * 0.4; // + rough allowance for climbing
+  const evaHours = (km, list) => km / RULES.speedKmh + list.reduce((s, t) => s + t.minutes, 0) / 60;
+  function renderPlanPanel() {
+    const picked = D.tasks.filter((t) => state.draft.has(t.id));
+    // 1) rank landing sites by tour length for the picked tasks
+    const sites = D.landingSites.map((s) => ({ ...s, km: tourKm(s.pos, picked) }));
+    const best = picked.length ? sites.reduce((b, s) => (s.km < b.km ? s : b)) : null;
+    if (best && $("#land-auto").checked) state.draftLanding = best.id;
+    const land = $("#land-list"); land.innerHTML = "";
+    for (const s of [...sites].sort((x, y) => (picked.length ? x.km - y.km : 0))) {
+      const b = html("button", { class: "land", type: "button", role: "radio", "aria-checked": String(s.id === state.draftLanding) });
+      const top = html("span", { class: "land-top" });
+      top.append(html("span", { class: "land-dot", "aria-hidden": "true" }, "A"), html("span", { class: "title-4" }, s.name));
+      if (best && s.id === best.id) top.append(html("span", { class: "badge" }, "Best"));
+      b.append(top, html("span", { class: "caption-4 land-km" }, picked.length ? `Tour about ${s.km.toFixed(1)} km${best && s.id !== best.id ? ` · +${(s.km - best.km).toFixed(1)} km vs best` : ""}` : s.note));
+      b.addEventListener("click", () => { $("#land-auto").checked = false; state.draftLanding = s.id; updateTaskSummary(); });
+      land.append(b);
+    }
+    $("#land-hint").textContent = picked.length
+      ? `Ranked by the shortest tour through your ${picked.length} task${picked.length > 1 ? "s" : ""}. ${landingOf(state.draftLanding).note}`
+      : "Pick tasks first. The planner then ranks the four landing sites by how short the tour from each would be.";
+    // distances on the cards follow the chosen landing site
+    document.querySelectorAll(".t-dist").forEach((el) => {
+      const t = D.tasks.find((x) => x.id === el.dataset.id), km = habKm(t), [dc, dl] = distClass(km);
+      el.className = `t-dist ${dc}`; el.textContent = `${dl} · ${km.toFixed(1)} km`;
+    });
+    // 2) budget
+    const site = landingOf(state.draftLanding), km = tourKm(site.pos, picked), use = lifeUse(km, picked);
+    const fill = $("#budget-fill");
+    fill.style.width = `${Math.min(100, use)}%`;
+    fill.className = use > RESERVE ? "over" : use > RESERVE * 0.8 ? "warn" : "";
+    $("#budget-text").textContent = picked.length
+      ? `About ${km.toFixed(1)} km and ${fmtMin(evaHours(km, picked) * 60)} outside. Life support use about ${Math.round(use)} % of the ${RESERVE} % allowed before the reserve.`
+      : "Life support use: none yet. The line marks the 30 % reserve.";
+    // 3) best fit: what to add next
+    const have = new Set(picked.map((t) => t.type));
+    const cands = D.tasks.filter((t) => !state.draft.has(t.id)).map((t) => {
+      const k2 = tourKm(site.pos, [...picked, t]), dk = k2 - km;
+      const fresh = !have.has(t.type);
+      const value = PRIO_VALUE[priority(t)] + (fresh ? 1 : 0);
+      const score = value / (dk / RULES.speedKmh + t.minutes / 60 + 0.3);
+      const over = lifeUse(k2, [...picked, t]) > RESERVE;
+      const why = [];
+      if (over) why.push("Would cut into the 30 % life support reserve");
+      else {
+        why.push(dk < 0.6 ? `On the way, adds only ${Math.max(0, dk).toFixed(1)} km` : `Adds ${dk.toFixed(1)} km to the tour`);
+        if (fresh && picked.length) why.push(`first ${PRODUCT[t.type][0]} today`);
+        if (priority(t) === "High") why.push("high priority");
+      }
+      return { t, score, over, why };
+    }).sort((x, y) => (x.over - y.over) || (y.score - x.score));
+    const ol = $("#fit-list"), prev = [...ol.children].map((li) => li.dataset.id).join();
+    ol.innerHTML = "";
+    if (state.draft.size >= MAX_TASKS) ol.append(html("li", { class: "caption-4 muted" }, `The tour is full at ${MAX_TASKS} tasks.`));
+    else cands.slice(0, 5).forEach((c, i) => {
+      const li = html("li", { class: c.over ? "over" : "" }); li.dataset.id = c.t.id;
+      const name = html("span", { class: "title-4" }); name.append(html("span", { class: "rank" }, `${i + 1}`), document.createTextNode(c.t.name));
+      const add = html("button", { class: "btn btn-ghost button-sm fit-add", type: "button", "aria-label": `Add ${c.t.name}` }, "Add");
+      add.addEventListener("click", () => {
+        const cb = document.getElementById(`task-${c.t.id}`);
+        if (cb && !cb.checked) { cb.checked = true; cb.dispatchEvent(new Event("change")); }
+        if (cb && cb.closest("#task-far") && $("#task-far").hidden) $("#btn-more-tasks").click();
+      });
+      li.append(name, add, html("span", { class: "why caption-4" }, `${TYPE[c.t.type].label} · ${c.why.join(" · ")}`));
+      ol.append(li);
+    });
+    if ([...ol.children].map((li) => li.dataset.id).join() !== prev) [...ol.children].forEach((li) => li.classList.add("flash"));
+  }
+
   function updateTaskSummary() {
     const picked = D.tasks.filter((t) => state.draft.has(t.id));
     const go = $("#btn-tasks-go");
     go.disabled = picked.length === 0;
+    renderPlanPanel();
     if (!picked.length) { $("#tasks-summary").textContent = "No tasks picked yet. Tick at least one."; return; }
     const mins = picked.reduce((s, t) => s + t.minutes, 0);
     const far = Math.max(...picked.map(habKm));
@@ -1112,6 +1192,7 @@
     const again = state.planned;
     state.draft = new Set(again ? state.selected[TODAY.id] : []);
     state.draftLanding = state.landing;
+    $("#land-auto").checked = !state.manualLanding;
     $("#tasks-title").textContent = again ? "Change your mind?" : "What do you want to do today?";
     $("#tasks-sub").textContent = again
       ? "Add or drop tasks. When you confirm, the planner redesigns all three routes."
@@ -1129,6 +1210,7 @@
     setTimeout(() => { // let the button repaint before the planner runs
       state.selected[TODAY.id] = new Set(state.draft);
       state.landing = state.draftLanding;
+      state.manualLanding = !$("#land-auto").checked;
       const site = landingOf(state.landing);
       D.habitat.pos = site.pos.slice(); D.habitat.name = site.name;
       planMission(TODAY);
@@ -1141,6 +1223,7 @@
     }, 30);
   }
   $("#btn-tasks-go").addEventListener("click", confirmTasks);
+  $("#land-auto").addEventListener("change", updateTaskSummary);
   $("#btn-tasks-cancel").addEventListener("click", () => setScreen("plan"));
   $("#btn-change").addEventListener("click", openTasks);
   $("#btn-more-tasks").addEventListener("click", () => {

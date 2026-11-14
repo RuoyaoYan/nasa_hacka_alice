@@ -44,12 +44,17 @@ deploy from branch) and share the link.
 
 ## How it works
 
-1. **Pick where you landed and today's tasks**: a full page briefing. Choose one of
-   four landing sites for the habitat (Octavia E. Butler Landing, Three Forks
-   plain, Upper fan camp, southern crater floor), then tasks: five everyday ones,
-   five Sightseeing viewpoints (photos you leave as view points for the next
-   crew), and ten farther away. Each card has a real Perseverance photo of the
-   place, points, time on site and distance. Tick up to seven and confirm.
+1. **Pick today's tasks, then land at the best site**: a full page briefing with
+   five everyday tasks, five Sightseeing viewpoints (photos left as view points for
+   the next crew) and ten tasks farther away. A live panel beside them shows:
+   - **Best fit for today**: the next tasks to add, re-ranked on every click by
+     priority, how far each one adds to the tour, and which data type is still
+     missing.
+   - **Best landing site**: the four landing sites ranked by the shortest tour
+     through your tasks (exact visiting order, straight lines plus 30 % for
+     detours). The habitat lands at the best one unless you pick another.
+   - **EVA budget**: estimated distance, time outside and life support use
+     against the 30 % reserve.
 2. **Choose a route**: *Safest*, *Fastest* or *Easiest*. Each visits the same
    targets you ticked and shows Komoot style route details (below).
 3. **Walk it**: the HUD tracks oxygen, suit power, radiation dose and distance.
@@ -105,7 +110,8 @@ Drag to pan, scroll or use **+ / −** to zoom, and use the layers button to
 switch base maps or show Perseverance's real path (loaded from NASA JPL if its
 server allows it). An internet connection is needed for the tiles. The **Open in Mars Trek** button opens the current view in NASA Mars Trek, where you can use its own distance, elevation profile and slope tools to check a route.
 
-**Positions.** The habitat, mission targets and routes are placed approximately
+**Positions.** Octavia E. Butler Landing (18.4446° N, 77.4509° E) and Belva crater
+(centre 18.48° N, 77.38° E, USGS Gazetteer) are exact. Other targets are placed approximately
 for gameplay; the Octavia E. Butler Landing marker is Perseverance's real landing
 site. To retrace a route precisely on the HiRISE imagery, press `D`, click along
 your path, and copy the logged `[lat, lon]` points from the browser console into
