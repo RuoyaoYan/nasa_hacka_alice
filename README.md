@@ -7,7 +7,13 @@ Pick today's science mission, compare three routes built from NASA orbiter data,
 then walk it. Conditions on Mars change, so dust storms, solar particle events
 and rough terrain force you to adapt on the way.
 
-![Planning a walk to the crater rim](docs/screenshots/plan.png)
+## ▶ Play now
+
+**https://ruoyaoyan.github.io/nasa_hacka_alice/**
+
+(Served by GitHub Pages. If the link shows a 404, turn Pages on once: Settings → Pages → Deploy from a branch → `main`, folder `/ (root)`.)
+
+![Route planner on the crater rim expedition](docs/screenshots/planner_rim_mock_tiles.png)
 
 ## Play it
 
