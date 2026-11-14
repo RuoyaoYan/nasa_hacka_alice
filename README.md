@@ -32,8 +32,8 @@ deploy from branch) and share the link.
 | `Space` | Pause the walk |
 | `F` | Fast forward |
 | `S` | Collect a sample at a stop |
-| `L` | Toggle the slope layer |
-| `D` | Draw mode: click the map to log route points |
+| `+` `−` | Zoom the map |
+| `D` | Draw mode: click the map to log `[lat, lon]` points |
 
 ## How it works
 
@@ -54,31 +54,41 @@ deploy from branch) and share the link.
 
 | Feature | Data | Type |
 |---|---|---|
-| Base map | HiRISE and CTX imagery (Mars Reconnaissance Orbiter) via [Mars Trek](https://trek.nasa.gov/mars/) | Optical |
-| Slope and climb | HiRISE elevation models via Mars Trek | Topographic |
+| Base map | HiRISE 25 cm and CTX 5 m imagery (Mars Reconnaissance Orbiter), Viking colour mosaic, live from [Mars Trek](https://trek.nasa.gov/mars/) | Optical |
+| Elevation layer | MOLA colour shaded relief (Mars Global Surveyor) via Mars Trek | Topographic |
+| Perseverance path | Mars 2020 traverse published by NASA JPL | Rover data |
 | Science targets | CRISM mineral maps (MRO) | Spectral |
 | Sand vs bedrock | THEMIS thermal data (Mars Odyssey) | Thermal |
 | Stop photos | Perseverance raw images gallery | Ground imagery |
 | Dust events | Perseverance MEDA and Curiosity REMS weather data | Atmospheric |
 | Radiation events | Curiosity RAD measurements | Radiation |
 
-## Swapping in real data
+## The map: real NASA imagery
 
-The prototype ships with a **stylised map** drawn from the Jezero layout, so it
-runs offline. To use real imagery:
+The map loads live tiles from **NASA Mars Trek** in your browser, in Mars Trek's
+equirectangular projection, so routes and pins sit on true Jezero coordinates.
+Higher resolution layers fade in as you zoom:
 
-1. **Map.** In Mars Trek, frame the Jezero area around the Perseverance landing
-   site, export or screenshot it, and save it as `assets/map.jpg` (any 16:9
-   image works best). The game detects it automatically and uses it as the
-   imagery layer.
-2. **Routes.** Press `D` in the game, click along your new paths, and copy the
-   logged points from the browser console into `data/missions.js`.
-3. **Photos.** Save Perseverance raw images as `assets/photos/delta.jpg`,
-   `assets/photos/dunes.jpg` and `assets/photos/rim.jpg`. Until then, the stop
-   cards show a drawn illustration.
-4. **Numbers.** Route distance and time are calculated from the path length.
-   Update each route's `climb` and `profile` with values from Mars Trek's
-   elevation profile tool.
+| Zoom | Layer | Resolution |
+|---|---|---|
+| Wide | Viking MDIM 2.1 colour mosaic | 232 m per pixel |
+| Regional | MRO CTX global mosaic (Caltech Murray Lab) | about 5 m per pixel |
+| Close up | MRO HiRISE orthomosaic of the Mars 2020 landing site (USGS) | 25 cm per pixel |
+| Optional | MGS MOLA colour shaded elevation | 463 m per pixel |
+
+Drag to pan, scroll or use **+ / −** to zoom, and use the layers button to
+switch base maps or show Perseverance's real path (loaded from NASA JPL if its
+server allows it). An internet connection is needed for the tiles.
+
+**Positions.** The habitat, mission targets and routes are placed approximately
+for gameplay; the Octavia E. Butler Landing marker is Perseverance's real landing
+site. To retrace a route precisely on the HiRISE imagery, press `D`, click along
+your path, and copy the logged `[lat, lon]` points from the browser console into
+`data/missions.js`. The cursor position is shown in the corner of the map.
+
+**Photos.** Save Perseverance raw images as `assets/photos/delta.jpg`,
+`assets/photos/dunes.jpg` and `assets/photos/rim.jpg`. Until then, stops show a
+drawn illustration.
 
 ## Game rules
 
@@ -93,9 +103,10 @@ These are simple game rules, **not real spacesuit figures**:
 ## Project structure
 
 ```
-index.html          layout, panels, HUD and dialogs
-style.css           design tokens and components
-app.js              map drawing, planning, EVA loop, events, scoring
+index.html          layout: details column, map card, dialogs
+style.css           design tokens and components (square corners throughout)
+marsmap.js          small slippy map engine for NASA Mars Trek tiles
+app.js              planning, route overlays, EVA loop, events, scoring
 data/missions.js    missions, routes, stops, events, terrain
 assets/fonts/       Poppins (SIL Open Font License)
 assets/photos/      put Perseverance photos here
@@ -106,7 +117,7 @@ docs/               proposal, build plan, mockups, screenshots
 
 The interface follows a strict design system: one typeface (Poppins), every
 font size on the Tailwind type scale with named text styles, spacing from a
-fixed token set, Tailwind corner radii, flat dark surfaces, Phosphor icons, one
+fixed token set, square corners everywhere, flat surfaces, Phosphor icons, one
 easing curve (`cubic-bezier(0.22, 1, 0.36, 1)`), visible focus rings,
 `prefers-reduced-motion` support, and a stacked layout below 900 px.
 
