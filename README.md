@@ -38,21 +38,34 @@ deploy from branch) and share the link.
 | `Space` | Pause the walk |
 | `F` | Fast forward |
 | `S` | Collect a sample at a stop |
+| `P` | Log a photo point for the next crew |
 | `+` `−` | Zoom the map |
 | `D` | Draw mode: click the map to log `[lat, lon]` points |
 
 ## How it works
 
 1. **Pick a mission**: delta clay sample, crater rim survey or dune field study.
-2. **Choose a route**: *Safest*, *Fastest* or *Most science*. Each shows the round
-   trip distance, walking time, climb, oxygen use, elevation profile, terrain mix
-   and risk.
+2. **Choose a route**: *Safest*, *Fastest* or *Easiest*. Each visits the same
+   targets you ticked and shows Komoot style route details (below).
 3. **Walk it**: the HUD tracks oxygen, suit power, radiation dose and distance.
    Science stops show what you would see on arrival.
-4. **React**: events pause the walk and ask for a decision. Returning early,
+4. **Leave data for the next crew**: press `P` (or the button) to log a photo point
+   tagged hazard, tip, science or view. It saves in your browser, appears on the
+   map and in *Crew photo points*, and hazard reports make future routes keep clear.
+5. **React**: events pause the walk and ask for a decision. Returning early,
    sheltering, or pushing on all have costs.
-5. **Score**: science points, plus a safety bonus if you get home with more than
+6. **Score**: science points, plus a safety bonus if you get home with more than
    30 % oxygen.
+
+### Route details, as in Komoot
+
+| Section | What it shows |
+|---|---|
+| Route details | Elevation profile on the Mars datum (Jezero floor about −2,560 m), steep stretches in orange, target markers. Click and drag to get uphill, downhill, highest and lowest point for that part; it is highlighted on the map |
+| Climbs and descents | Each climb or descent with category, average grade, height gain and length. Click one to select it |
+| Terrain types and surfaces | Kilometres of crater floor, delta deposits, rim slopes and sand fields, and of bedrock, gravel, loose sand, rough ground and boulders |
+| Weather | Today plus the next sols: high and low temperature, dust opacity τ, wind, and tips. Illustrative values within the ranges Perseverance MEDA and Curiosity REMS recorded |
+| Crew photo points | Notes and HiRISE snapshots left by earlier crews and by you |
 
 ![Dust storm event](docs/screenshots/event.png)
 
@@ -118,7 +131,8 @@ danger on the way. `planner.js` solves exactly that:
 
 The three options use different risk weights: **Safest** forbids slopes over 12°
 and every boulder field, **Fastest** accepts sand, rocks and slopes up to 25°,
-and **Most science** is a safe route that also visits the bonus targets. Tick
+and **Easiest** keeps to gentle ground (slopes under 9°, long detours around sand)
+so it is longer but has the least climbing. Tick
 targets on or off in the panel, or click a faint **+** marker on the map, and all
 three are re-planned instantly. Terrain events (boulders, sand) fire where the
 chosen route actually enters those zones.
@@ -137,7 +151,7 @@ that have a sunlit partner next to them. That pairing is what relief looks
 like from orbit, so it catches hills and buttes, crater walls, scarps and big
 boulders, while broad dark sand or dust patches are ignored. It runs at two
 scales (10 m and 30 m pixels) and also marks rough texture. Detected hazards
-are blocked for the Safest and Most science routes; Fastest may cross them
+are blocked for the Safest and Easiest routes; Fastest may cross them
 with a heavy penalty, which triggers a terrain event. The panel reports what
 was found. If NASA's tile server does not allow the browser to read pixels,
 the game says so and keeps using the terrain model.
@@ -180,9 +194,9 @@ These are simple game rules, **not real mission figures**:
 
 | Mission | Difficulty | Targets | Typical tour |
 |---|---|---|---|
-| Delta front survey | Easy | Hawksbill Gap clay, Three Forks depot, Enchanted Lake, Séítah wind, landing site (+2 bonus) | 8 to 10 km |
-| Upper fan and Belva crater | Moderate | Belva crater wall, Hawksbill Gap, depot inventory, Enchanted Lake, upper fan boulders (+2 bonus) | 11 to 14 km |
-| Crater rim expedition | Hard | Lookout Hill rim rock, Neretva Vallis, Belva, rim slope radiation, Kodiak (+2 bonus) | 19 to 24 km |
+| Delta front survey | Easy | Hawksbill Gap clay, Three Forks depot, Enchanted Lake, Séítah wind, landing site (+2 optional) | 8 to 10 km |
+| Upper fan and Belva crater | Moderate | Belva crater wall, Hawksbill Gap, depot inventory, Enchanted Lake, upper fan boulders (+2 optional) | 11 to 14 km |
+| Crater rim expedition | Hard | Lookout Hill rim rock, Neretva Vallis, Belva, rim slope radiation, Kodiak (+2 optional) | 19 to 24 km |
 
 Landmark positions and the terrain model are approximate, for gameplay.
 

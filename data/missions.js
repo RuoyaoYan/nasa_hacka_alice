@@ -68,7 +68,7 @@
     profiles: {
       safest:  { label: "Safest", note: "Avoids slopes over 12° and every boulder field", color: "#2E9E52", maxSlope: 12, steep: 6, sand: 4, rock: Infinity, bonus: false },
       fastest: { label: "Fastest", note: "Shortest distance, accepts sand, rocks and steeper ground", color: "#2F6FD6", maxSlope: 25, steep: 0.4, sand: 0.3, rock: 0.6, bonus: false },
-      science: { label: "Most science", note: "Safe route that also visits the bonus targets", color: "#8A4FE0", maxSlope: 12, steep: 4, sand: 2.5, rock: Infinity, bonus: true }
+      easiest: { label: "Easiest", note: "Least climbing and soft sand, even if a little longer", color: "#8A4FE0", maxSlope: 9, steep: 14, sand: 9, rock: Infinity, bonus: false }
     },
 
     missions: [
@@ -84,8 +84,8 @@
           { id: "el", pos: P.enchanted, type: photo, name: "Enchanted Lake panorama", points: 80, minutes: 25, photo: "delta", detail: "Where Perseverance first saw sedimentary rocks up close." },
           { id: "se", pos: P.seitah, type: measure, name: "Wind reading in Séítah", points: 70, minutes: 30, photo: "dunes", detail: "Set up the anemometer on a ripple crest." },
           { id: "ls", pos: P.landing, type: photo, name: "Landing site survey", points: 40, minutes: 15, photo: "rim", detail: "Document Perseverance's landing site and any blown debris." },
-          { id: "ko", pos: P.kodiak, type: photo, name: "Kodiak butte layers", points: 90, minutes: 25, photo: "rim", detail: "A flat topped remnant of the delta.", bonus: true },
-          { id: "sw", pos: P.seitahWest, type: sample, name: "Séítah sand sample", points: 80, minutes: 30, photo: "dunes", detail: "Wind blown sand from the ripple field.", bonus: true }
+          { id: "ko", pos: P.kodiak, type: photo, name: "Kodiak butte layers", points: 90, minutes: 25, photo: "rim", detail: "A flat topped remnant of the delta.", optional: true },
+          { id: "sw", pos: P.seitahWest, type: sample, name: "Séítah sand sample", points: 80, minutes: 30, photo: "dunes", detail: "Wind blown sand from the ripple field.", optional: true }
         ]
       },
       {
@@ -100,8 +100,8 @@
           { id: "tf", pos: P.threeForks, type: measure, name: "Depot tube inventory", points: 60, minutes: 25, photo: "rim", detail: "Check the seals on the cached sample tubes." },
           { id: "el", pos: P.enchanted, type: sample, name: "Enchanted Lake mudstone", points: 90, minutes: 35, photo: "delta", detail: "Fine grained lake sediment." },
           { id: "uf", pos: P.upperFan, type: photo, name: "Upper fan boulders", points: 70, minutes: 20, photo: "rim", detail: "Boulders carried in by a late, high energy flood." },
-          { id: "ih", pos: P.isoHill, type: photo, name: "Isolated hill", points: 80, minutes: 20, photo: "rim", detail: "Stacked river layers formed by a deep, fast river.", bonus: true },
-          { id: "fl", pos: P.fanLobe, type: sample, name: "Northern fan lobe", points: 80, minutes: 30, photo: "delta", detail: "Coarse river sediment near the old channel.", bonus: true }
+          { id: "ih", pos: P.isoHill, type: photo, name: "Isolated hill", points: 80, minutes: 20, photo: "rim", detail: "Stacked river layers formed by a deep, fast river.", optional: true },
+          { id: "fl", pos: P.fanLobe, type: sample, name: "Northern fan lobe", points: 80, minutes: 30, photo: "delta", detail: "Coarse river sediment near the old channel.", optional: true }
         ]
       },
       {
@@ -116,8 +116,8 @@
           { id: "bv", pos: P.belva, type: sample, name: "Belva crater", points: 120, minutes: 40, photo: "rim", detail: "Delta layers exposed in the crater wall." },
           { id: "rs", pos: P.rimSlope, type: measure, name: "Radiation on the rim slope", points: 80, minutes: 30, photo: "rim", detail: "Compare dose on open slopes with the crater floor." },
           { id: "ko", pos: P.kodiak, type: photo, name: "Kodiak butte", points: 90, minutes: 20, photo: "rim", detail: "A last remnant of the delta, standing alone." },
-          { id: "sr", pos: P.rimSouth, type: sample, name: "Southern rim outcrop", points: 100, minutes: 35, photo: "rim", detail: "Altered rock that may record ancient hot springs.", bonus: true },
-          { id: "se", pos: P.seitah, type: measure, name: "Wind reading in Séítah", points: 70, minutes: 30, photo: "dunes", detail: "Wind data on the way home.", bonus: true }
+          { id: "sr", pos: P.rimSouth, type: sample, name: "Southern rim outcrop", points: 100, minutes: 35, photo: "rim", detail: "Altered rock that may record ancient hot springs.", optional: true },
+          { id: "se", pos: P.seitah, type: measure, name: "Wind reading in Séítah", points: 70, minutes: 30, photo: "dunes", detail: "Wind data on the way home.", optional: true }
         ]
       }
     ],

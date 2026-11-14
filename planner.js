@@ -139,9 +139,15 @@
     }
     fields.push({ s, w, n, e, W: m.width, H: m.height, block, dist: distanceTransform(block, m.width, m.height, pxX, pxY) });
   }
+  // hazards reported by crews (photo points tagged hazard): circles in metres
+  let pointHazards = [];
   // distance (m) from a point to the nearest fine hazard; Infinity where no field covers it
   function hazardDist(lat, lon) {
     let best = Infinity;
+    for (const h of pointHazards) {
+      const d = Math.hypot((lat - h.pos[0]) * KM_PER_DEG, (lon - h.pos[1]) * KM_PER_DEG * Math.cos((lat * Math.PI) / 180)) * 1000 - h.r;
+      best = Math.min(best, Math.max(0, d));
+    }
     for (const f of fields) {
       if (lat < f.s || lat > f.n || lon < f.w || lon > f.e) continue;
       const fx = ((lon - f.w) / (f.e - f.w)) * f.W - 0.5, fy = ((f.n - lat) / (f.n - f.s)) * f.H - 0.5;
@@ -152,6 +158,32 @@
       best = Math.min(best, v);
     }
     return best;
+  }
+
+  function refreshHd() {
+    for (let r = 0; r < G.rows; r++) for (let c = 0; c < G.cols; c++) {
+      const q = G.ll(r, c);
+      G.hd[r * G.cols + c] = hazardDist(q[0], q[1]);
+    }
+  }
+  function setPointHazards(D, list) {
+    if (!G) G = buildGrid(D);
+    pointHazards = list;
+    refreshHd();
+  }
+  // What the ground is like at a point (for the terrain and surface breakdown)
+  function classify(lat, lon) {
+    const c = G.cellOf([lat, lon]);
+    const lonFront = 77.405 - (lat - 18.445) * 0.27;
+    const terrain = G.sand[c] > 0.35 ? "sand" : lon < 77.345 && G.elev[c] > 120 ? "rim" : lat > 18.441 && lon < lonFront ? "delta" : "floor";
+    let surface = "bedrock";
+    const hd = hazardDist(lat, lon);
+    if (G.rock[c] || hd < 1) surface = "boulders";
+    else if (G.sand[c] > 0.35) surface = "sand";
+    else if (G.ext[c] & 64) surface = "rough";
+    else if (G.slope[c] > 6) surface = "gravel";
+    if (fields.length && !fields.some((f) => lat >= f.s && lat <= f.n && lon >= f.w && lon <= f.e)) surface = "unknown";
+    return { terrain, surface };
   }
 
   // Merge a hazard mask (any resolution, lat/lon bounds) into the grid.
@@ -186,11 +218,7 @@
         if (rr >= 0 && cc >= 0 && rr < G.rows && cc < G.cols) { const i = rr * G.cols + cc; hits[1][i] = hits[2][i] = hits[4][i] = hits[32][i] = 0; G.ext[i] &= ~BLOCK_BITS; }
       }
     }
-    // distance from each planner cell centre to the nearest fine hazard
-    for (let r = 0; r < G.rows; r++) for (let c = 0; c < G.cols; c++) {
-      const p = G.ll(r, c);
-      G.hd[r * G.cols + c] = Math.min(G.hd[r * G.cols + c], hazardDist(p[0], p[1]));
-    }
+    refreshHd();
     let blocked = 0;
     for (let i = 0; i < G.N; i++) {
       if (!tot[i]) continue;
@@ -445,5 +473,5 @@
     });
   }
 
-  window.MomootPlanner = { plan, analyse, hazardImage, mergeMask, fieldImages, hazardDist, CLEAR_M, grid: () => G, init: (D) => { if (!G) G = buildGrid(D); return G; } };
+  window.MomootPlanner = { plan, analyse, hazardImage, mergeMask, fieldImages, hazardDist, CLEAR_M, classify, setPointHazards, elevAt: (lat, lon) => G.elevAt(lat, lon), grid: () => G, init: (D) => { if (!G) G = buildGrid(D); return G; } };
 })();

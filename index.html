@@ -11,7 +11,7 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23C2410C'/%3E%3Cpath d='M6 22 L13 12 L18 18 L21 14 L26 22Z' fill='%23fff'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
   <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css">
-  <link rel="stylesheet" href="style.css?v=20261114f">
+  <link rel="stylesheet" href="style.css?v=20261114h">
 </head>
 <body data-screen="intro">
   <a class="skip-link button-sm" href="#side">Skip to mission details</a>
@@ -61,15 +61,50 @@
           <dl class="stats" id="route-stats"></dl>
         </section>
 
-        <section class="block" aria-labelledby="elev-title">
-          <h2 class="heading-6" id="elev-title">Elevation</h2>
-          <svg class="profile" id="route-profile" viewBox="0 0 480 120" role="img" aria-label="Elevation profile of the selected route, one way"></svg>
+        <section class="block" aria-labelledby="rd-title">
+          <h2 class="heading-5" id="rd-title">Route details</h2>
+          <h3 class="title-2">Elevation</h3>
+          <div class="card-box">
+            <p class="body-6 muted" id="elev-hint">Nothing selected. Click and drag on the chart to see the stats for part of the route.</p>
+            <svg class="profile" id="route-profile" viewBox="0 0 480 190" role="img" aria-label="Elevation profile of the selected route. Drag to select a part."></svg>
+            <dl class="stats elev-stats" id="elev-stats"></dl>
+          </div>
         </section>
 
-        <section class="block" aria-labelledby="terrain-title">
-          <h2 class="heading-6" id="terrain-title">Terrain</h2>
-          <div class="mix" id="route-mix" aria-hidden="true"></div>
-          <ul class="mix-legend body-6" id="route-mix-legend"></ul>
+        <section class="block" aria-labelledby="cd-title">
+          <h2 class="heading-5" id="cd-title">Climbs and descents</h2>
+          <div class="seg" role="tablist" aria-label="Climbs or descents">
+            <button class="seg-btn button-sm" type="button" role="tab" aria-selected="true" data-cd="climbs">Climbs</button>
+            <button class="seg-btn button-sm" type="button" role="tab" aria-selected="false" data-cd="descents">Descents</button>
+          </div>
+          <ol class="climbs" id="climbs"></ol>
+        </section>
+
+        <section class="block" aria-labelledby="ws-title">
+          <h2 class="heading-5" id="ws-title">Terrain types and surfaces</h2>
+          <div class="card-box">
+            <h3 class="title-2">Terrain types</h3>
+            <div class="mix" id="way-bar" aria-hidden="true"></div>
+            <ul class="mix-list body-5" id="way-list"></ul>
+            <hr class="rule">
+            <h3 class="title-2">Surfaces</h3>
+            <div class="mix" id="surf-bar" aria-hidden="true"></div>
+            <ul class="mix-list body-5" id="surf-list"></ul>
+          </div>
+        </section>
+
+        <section class="block" aria-labelledby="wx-title">
+          <div class="row-between"><h2 class="heading-5" id="wx-title">Weather</h2><span class="caption-5 muted">Based on MEDA and REMS records</span></div>
+          <div class="wx-today card-soft" id="wx-today"></div>
+          <div class="wx-more" id="wx-more" hidden></div>
+          <button class="wp-link body-5 wx-toggle" id="wx-toggle" type="button" aria-expanded="false">Show more sols</button>
+          <div class="card-soft wx-tips" id="wx-tips"></div>
+        </section>
+
+        <section class="block" aria-labelledby="hl-title">
+          <h2 class="heading-5" id="hl-title">Crew photo points</h2>
+          <p class="body-6 muted">Photos and notes left by earlier crews. Press <kbd class="key">P</kbd> during an EVA to leave one for the next astronaut. Hazard reports change future routes.</p>
+          <ul class="highlights" id="highlights"></ul>
         </section>
 
         <section class="block" aria-labelledby="wp-title">
@@ -121,6 +156,11 @@
           <button class="btn btn-primary button-md wide" id="btn-sample" type="button"></button>
         </section>
 
+        <section class="block">
+          <button class="btn btn-ghost button-md wide" id="btn-photo" type="button"><i class="ph ph-camera" aria-hidden="true"></i>Log a photo point for the next crew <kbd class="key">P</kbd></button>
+          <p class="caption-5 muted" id="photo-count"></p>
+        </section>
+
         <section class="block keys body-6 muted" aria-label="Keyboard shortcuts">
           <span><kbd class="key">Space</kbd> Pause</span>
           <span><kbd class="key">F</kbd> Fast forward</span>
@@ -143,6 +183,7 @@
           <p class="title-5 muted">Overlays</p>
           <label class="opt body-6"><input type="checkbox" id="ov-routes" checked> Route options</label>
           <label class="opt body-6"><input type="checkbox" id="ov-hazards" checked> Hazard map: steep slopes, detected hazards, boulders, sand</label>
+          <label class="opt body-6"><input type="checkbox" id="ov-photos" checked> Crew photo points</label>
           <label class="opt body-6"><input type="checkbox" id="ov-traverse"> Perseverance's real path <span class="caption-5 muted" id="traverse-note"></span></label>
         </div>
       </div>
@@ -207,6 +248,29 @@
     </div>
   </div>
 
+  <!-- Photo point -->
+  <div class="overlay" id="photo" role="dialog" aria-modal="true" aria-labelledby="photo-title" hidden>
+    <div class="modal photo">
+      <p class="caption-3 overline">Photo point · for the next crew</p>
+      <h2 class="heading-5" id="photo-title">What did you see here?</h2>
+      <figure class="stop-photo" id="photo-preview"></figure>
+      <p class="caption-5 muted" id="photo-where"></p>
+      <div class="tag-row" role="radiogroup" aria-label="Type of note">
+        <label class="tag-opt body-5"><input type="radio" name="ptag" value="hazard" checked><i class="ph ph-warning" aria-hidden="true"></i>Hazard</label>
+        <label class="tag-opt body-5"><input type="radio" name="ptag" value="tip"><i class="ph ph-lightbulb" aria-hidden="true"></i>Tip</label>
+        <label class="tag-opt body-5"><input type="radio" name="ptag" value="science"><i class="ph ph-flask" aria-hidden="true"></i>Science</label>
+        <label class="tag-opt body-5"><input type="radio" name="ptag" value="view"><i class="ph ph-mountains" aria-hidden="true"></i>View</label>
+      </div>
+      <label class="field"><span class="title-4">Title</span><input class="input body-6" id="photo-name" maxlength="60"></label>
+      <label class="field"><span class="title-4">Note for the next astronaut</span><textarea class="input body-6" id="photo-note" rows="3" maxlength="240"></textarea></label>
+      <p class="caption-5 field-error" id="photo-error" hidden>Add a short title so the next crew knows what this is.</p>
+      <div class="end-actions">
+        <button class="btn btn-primary button-md" id="btn-photo-save" type="button">Save photo point · +10 pts</button>
+        <button class="btn btn-ghost button-md" id="btn-photo-cancel" type="button">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Sources -->
   <div class="overlay" id="sources" role="dialog" aria-modal="true" aria-labelledby="sources-title" hidden>
     <div class="modal sources">
@@ -242,10 +306,10 @@
     if (b) { b.hidden = false; b.querySelector("code").textContent = e.message + " (" + (e.filename || "").split("/").pop() + ":" + e.lineno + ")"; }
   });
   </script>
-  <script src="data/missions.js?v=20261114f"></script>
-  <script src="marsmap.js?v=20261114f"></script>
-  <script src="planner.js?v=20261114f"></script>
-  <script src="hazardscan.js?v=20261114f"></script>
-  <script src="app.js?v=20261114f"></script>
+  <script src="data/missions.js?v=20261114h"></script>
+  <script src="marsmap.js?v=20261114h"></script>
+  <script src="planner.js?v=20261114h"></script>
+  <script src="hazardscan.js?v=20261114h"></script>
+  <script src="app.js?v=20261114h"></script>
 </body>
 </html>
