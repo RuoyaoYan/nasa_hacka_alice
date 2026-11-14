@@ -83,23 +83,32 @@
   // Cost to enter a cell, per km, for a given risk profile
   const BLOCK_BITS = 1 | 2 | 4 | 32; // slope, crater, rock, relief seen in imagery
   const CLEAR_M = 50;   // safe routes never come closer than this to a detected hazard
-  const BUFFER_M = 70;  // extra cost fades out over this distance beyond the margin
+  const BUFFER_M = 70;
+  const RELAX_PEN = 150;  // extra cost fades out over this distance beyond the margin
   function cellCost(G, i, W) {
     const sl = G.slope[i];
-    if (sl > W.maxSlope) return Infinity;
-    if (G.rock[i] && W.rock === Infinity) return Infinity;
-    const x = G.ext[i], hd = G.hd[i];
     const safe = W.rock === Infinity;
-    if (safe && ((x & BLOCK_BITS) || hd < CLEAR_M)) return Infinity; // keep a hard safety margin
+    const x = G.ext[i], hd = G.hd[i];
+    // In relaxed mode nothing is forbidden, but every forbidden cell costs as much as
+    // ~150 cells of open ground, so the route only crosses what it truly cannot go around.
+    let pen = 0;
+    if (G.exempt && G.exempt[i]) return 1 + 4 * clamp((sl - 5) / 10, 0, 1.5) + (x & BLOCK_BITS ? 6 : 0); // a target's own approach
+    if (sl > W.maxSlope) { if (!W.relax || sl > 40) return Infinity; pen += RELAX_PEN; }
+    if (safe && G.rock[i]) { if (!W.relax) return Infinity; pen += RELAX_PEN; }
+    if (safe && (x & BLOCK_BITS)) { if (!W.relax) return Infinity; pen += RELAX_PEN; }
+    else if (safe && hd < CLEAR_M) { if (!W.relax) return Infinity; pen += RELAX_PEN * (0.3 + 0.7 * (1 - hd / CLEAR_M)); }
     const steep = clamp((sl - 5) / 10, 0, 1.5);
-    let c = 1 + W.steep * steep + W.sand * G.sand[i] + (G.rock[i] ? W.rock : 0);
-    if (x & BLOCK_BITS || hd < 15) c += 3;          // fastest profile pays a big penalty instead
+    let c = 1 + W.steep * steep + W.sand * G.sand[i] + (G.rock[i] && !safe ? W.rock : 0);
+    if (!safe) {                                     // fastest: rocks are a nuisance, hills and crater walls are real obstacles
+      if (x & (1 | 2 | 32)) c += 14;
+      else if (x & 4 || hd < 15) c += 3;
+    }
     if (safe && hd < CLEAR_M + BUFFER_M) {           // soft buffer: the cheapest line runs parallel to the hazard edge
       const t = 1 - (hd - CLEAR_M) / BUFFER_M;
       c += 0.8 * t * t;
     }
     if (x & 64) c += 0.4 + (W.rock === Infinity ? 0.6 : 0.2); // rough ground is slower
-    return c;
+    return c + pen;
   }
 
   // ---------- Fine hazard fields: distance in metres to the nearest detected hazard ----------
@@ -380,13 +389,22 @@
     if (!G) G = buildGrid(D);
     const pts = [D.habitat.pos, ...targets.map((t) => t.pos)];
     const cells = pts.map((p) => G.cellOf(p));
+    // the last ~100 m to each target may be close to hazards (a sample can sit beside a boulder)
+    G.exempt = new Uint8Array(G.N);
+    for (const c0 of cells) {
+      const r0 = (c0 / G.cols) | 0, k0 = c0 % G.cols;
+      for (let dr = -2; dr <= 2; dr++) for (let dc = -2; dc <= 2; dc++) {
+        const rr = r0 + dr, cc = k0 + dc;
+        if (dr * dr + dc * dc <= 5 && rr >= 0 && cc >= 0 && rr < G.rows && cc < G.cols) G.exempt[rr * G.cols + cc] = 1;
+      }
+    }
     // one Dijkstra per point; relax rules once if something is unreachable
     let runs = cells.map((c) => dijkstra(G, c, W));
     let relaxed = false, runW = W;
     const unreachable = () => runs.some((run) => cells.some((c) => run.dist[c] === Infinity));
     if (unreachable()) {
       relaxed = true;
-      const W2 = Object.assign({}, W, { maxSlope: 40, rock: W.rock === Infinity ? 30 : W.rock });
+      const W2 = Object.assign({}, W, { relax: true });
       runs = cells.map((c) => dijkstra(G, c, W2));
       runW = W2;
     }
@@ -408,6 +426,7 @@
       legs.push(sm);
       line = line.concat(k === 0 ? sm : sm.slice(1));
     }
+    G.exempt = null;
     return { line, legs, order: order.slice(1).map((k) => k - 1), nodes, orders, ms: performance.now() - t0, relaxed };
   }
 

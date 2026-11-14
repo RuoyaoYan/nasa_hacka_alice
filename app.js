@@ -700,7 +700,7 @@
       ul.append(li);
     }
     const p = r.plan;
-    $("#plan-info").textContent = `Planner checked ${p.nodes.toLocaleString("en")} search steps over ${p.orders.toLocaleString("en")} possible orders in ${Math.max(1, Math.round(p.ms))} ms. Best order: ${r.allStops.map((s) => s.order + " " + s.name.split(" ").slice(0, 2).join(" ")).join(" → ")}.${p.relaxed ? " Some targets needed steeper ground than this profile allows." : ""}`;
+    $("#plan-info").textContent = `Planner checked ${p.nodes.toLocaleString("en")} search steps over ${p.orders.toLocaleString("en")} possible orders in ${Math.max(1, Math.round(p.ms))} ms. Best order: ${r.allStops.map((s) => s.order + " " + s.name.split(" ").slice(0, 2).join(" ")).join(" → ")}.${p.relaxed ? " One target is boxed in by hazards, so the route crosses the narrowest gap it could find. Check the map before you go." : ""}`;
   }
 
   function toggleObjective(id, on) {
