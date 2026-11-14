@@ -464,3 +464,15 @@ body:not([data-screen="eva"]):not([data-screen="event"]):not([data-screen="end"]
 }
 .btn[hidden], .task-grid[hidden] { display: none !important; }
 .task .t-imgbox { position: relative; }
+
+.tasks-sec { margin-top: var(--s-400); }
+.tasks-sec > h2 + * { margin-top: var(--s-50); }
+.tasks-sec > .task-grid, .tasks-sec > .land-grid { margin-top: var(--s-200); }
+.land-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: var(--s-200); }
+.land { text-align: left; font-family: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--line); padding: var(--s-200); cursor: pointer; display: flex; flex-direction: column; gap: var(--s-50); transition: border-color var(--t-color) var(--ease), box-shadow var(--t-color) var(--ease); }
+.land:hover { border-color: var(--line-strong); }
+.land[aria-checked="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 2px var(--accent); }
+.land .land-top { display: flex; align-items: center; gap: var(--s-75); }
+.land .land-dot { width: 22px; height: 22px; display: grid; place-items: center; background: #1D1C1A; color: #FFFFFF; font: 600 12px/1 "Poppins", sans-serif; }
+.land[aria-checked="true"] .land-dot { background: var(--accent); }
+.task .t-type.sightsee { background: rgba(37, 99, 235, 0.9); }

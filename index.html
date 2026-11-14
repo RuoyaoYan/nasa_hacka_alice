@@ -11,7 +11,7 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23C2410C'/%3E%3Cpath d='M6 22 L13 12 L18 18 L21 14 L26 22Z' fill='%23fff'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
   <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css">
-  <link rel="stylesheet" href="style.css?v=20261114j">
+  <link rel="stylesheet" href="style.css?v=20261114l">
 </head>
 <body data-screen="intro">
   <a class="skip-link button-sm" href="#side">Skip to mission details</a>
@@ -37,7 +37,20 @@
         <h1 class="heading-3" id="tasks-title">What do you want to do today?</h1>
         <p class="body-3 muted" id="tasks-sub">Pick one or more tasks. When you confirm, the planner works out the best order and three routes to get there and back safely.</p>
       </header>
-      <ul class="task-grid" id="task-today" aria-label="Today's tasks"></ul>
+      <section class="tasks-sec" aria-labelledby="land-title">
+        <h2 class="heading-6" id="land-title">Where did you land?</h2>
+        <p class="body-6 muted">Your habitat stands here. Every tour starts and ends at it.</p>
+        <div class="land-grid" id="land-list" role="radiogroup" aria-labelledby="land-title"></div>
+      </section>
+      <section class="tasks-sec" aria-labelledby="today-title">
+        <h2 class="heading-6" id="today-title">Everyday tasks</h2>
+        <ul class="task-grid" id="task-today" aria-label="Everyday tasks"></ul>
+      </section>
+      <section class="tasks-sec" aria-labelledby="sight-title">
+        <h2 class="heading-6" id="sight-title">Sightseeing</h2>
+        <p class="body-6 muted">Drive to a viewpoint and take photos. Each one is saved as a view photo point for the next crew.</p>
+        <ul class="task-grid" id="task-sight" aria-label="Sightseeing"></ul>
+      </section>
       <div class="tasks-more">
         <button class="btn btn-ghost button-sm" id="btn-more-tasks" type="button" aria-expanded="false" aria-controls="task-far"><i class="ph ph-caret-down" aria-hidden="true"></i><span>Show tasks farther away</span></button>
         <ul class="task-grid" id="task-far" aria-label="Tasks farther away" hidden></ul>
@@ -327,10 +340,10 @@
     if (b) { b.hidden = false; b.querySelector("code").textContent = e.message + " (" + (e.filename || "").split("/").pop() + ":" + e.lineno + ")"; }
   });
   </script>
-  <script src="data/missions.js?v=20261114j"></script>
-  <script src="marsmap.js?v=20261114j"></script>
-  <script src="planner.js?v=20261114j"></script>
-  <script src="hazardscan.js?v=20261114j"></script>
-  <script src="app.js?v=20261114j"></script>
+  <script src="data/missions.js?v=20261114l"></script>
+  <script src="marsmap.js?v=20261114l"></script>
+  <script src="planner.js?v=20261114l"></script>
+  <script src="hazardscan.js?v=20261114l"></script>
+  <script src="app.js?v=20261114l"></script>
 </body>
 </html>

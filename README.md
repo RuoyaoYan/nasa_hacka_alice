@@ -44,8 +44,11 @@ deploy from branch) and share the link.
 
 ## How it works
 
-1. **Pick today's tasks**: a full page briefing shows five everyday tasks near the
-   habitat, plus ten farther away. Each card has a real Perseverance photo of the
+1. **Pick where you landed and today's tasks**: a full page briefing. Choose one of
+   four landing sites for the habitat (Octavia E. Butler Landing, Three Forks
+   plain, Upper fan camp, southern crater floor), then tasks: five everyday ones,
+   five Sightseeing viewpoints (photos you leave as view points for the next
+   crew), and ten farther away. Each card has a real Perseverance photo of the
    place, points, time on site and distance. Tick up to seven and confirm.
 2. **Choose a route**: *Safest*, *Fastest* or *Easiest*. Each visits the same
    targets you ticked and shows Komoot style route details (below).
@@ -118,7 +121,9 @@ Routes are not drawn by hand. Real traverses wind because the crew has several
 things to do (collect samples, take photos, take measurements) and has to avoid
 danger on the way. `planner.js` solves exactly that:
 
-1. **Terrain cost map.** A grid of 50 m cells over the study area. Each cell has
+1. **Terrain cost map.** A grid of 50 m cells over about 14 × 17 km of Jezero
+   (267 × 343 cells). Each search only looks 4 km around the chosen stops, so it
+   stays fast. Each cell has
    an elevation from a simplified terrain model of Jezero (delta front scarp
    with the Hawksbill Gap valley, upper fan, Kodiak butte, Belva crater, and the
    western rim notched by Neretva Vallis), a slope, and whether it lies in loose
@@ -195,9 +200,9 @@ These are simple game rules, **not real mission figures**:
 
 ## Tasks
 
-| Today's five | Farther away |
-|---|---|
-| Clay sample at Hawksbill Gap, Three Forks sample depot, wind reading in Séítah, landing site survey, Enchanted Lake mudstone | Kodiak butte, Séítah sand, Belva crater wall, upper fan boulders, isolated hill, northern fan lobe, Neretva Vallis inlet, Lookout Hill rim rock, rim slope radiation, southern rim outcrop |
+| Everyday | Sightseeing | Farther away |
+|---|---|---|
+| Clay sample at Hawksbill Gap, Three Forks sample depot, wind reading in Séítah, landing site survey, Enchanted Lake mudstone | Belva crater panorama, Kodiak at sunrise, South Séítah ridges, Neretva Vallis overlook, Jezero rim skyline | Kodiak butte, Séítah sand, Belva crater wall, upper fan boulders, isolated hill, northern fan lobe, Neretva Vallis inlet, Lookout Hill rim rock, rim slope radiation, southern rim outcrop |
 
 The task with the most points becomes the main task. A tour over 15 km adds a
 radiation event on the open slopes.

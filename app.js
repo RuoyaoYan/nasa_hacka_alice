@@ -46,7 +46,7 @@
     return n;
   }
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-  const fmtMin = (m) => { const h = Math.floor(m / 60); const mm = Math.round(m % 60); return h ? `${h} h ${String(mm).padStart(2, "0")}` : `${mm} min`; };
+  const fmtMin = (m) => { m = Math.round(m); const h = Math.floor(m / 60); const mm = m % 60; return h ? `${h} h ${String(mm).padStart(2, "0")}` : `${mm} min`; };
   const fmtClock = (m) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(Math.floor(m % 60)).padStart(2, "0")}`;
   const fmtLatLon = (lat, lon) => `${Math.abs(lat).toFixed(5)}° ${lat >= 0 ? "N" : "S"}, ${Math.abs(lon).toFixed(5)}° ${lon >= 0 ? "E" : "W"}`;
   const mission = () => D.missions[state.missionIdx];
@@ -56,11 +56,14 @@
   // Routes come from planner.js: a terrain cost map, Dijkstra between every
   // pair of targets, and a depth first search over visiting orders.
   const Planner = window.MomootPlanner;
-  const TYPE = { sample: { label: "Sample", icon: "ph-flask" }, photo: { label: "Photo", icon: "ph-camera" }, measure: { label: "Measure", icon: "ph-gauge" } };
+  const TYPE = { sample: { label: "Sample", icon: "ph-flask" }, photo: { label: "Photo", icon: "ph-camera" }, measure: { label: "Measure", icon: "ph-gauge" }, sightsee: { label: "Sightseeing", icon: "ph-binoculars" } };
   const TODAY = D.missions[0];
   TODAY.objectives = D.tasks;
   state.selected = { [TODAY.id]: new Set(D.tasks.filter((t) => t.today).slice(0, 3).map((t) => t.id)) };
-  const habKm = (t) => MarsMap.distanceKm(D.habitat.pos, t.pos);
+  state.landing = D.landingSites[0].id;
+  state.draftLanding = state.landing;
+  const landingOf = (id) => D.landingSites.find((s) => s.id === id);
+  const habKm = (t) => MarsMap.distanceKm(landingOf(state.draftLanding).pos, t.pos);
 
   function measureLine(r) {
     r.cum = [0];
@@ -328,7 +331,7 @@
         list.push({ pos: h.pos, el });
       }
     }
-    list.push({ pos: D.habitat.pos, el: pinEl("", "A", "Habitat") });
+    list.push({ pos: D.habitat.pos, el: pinEl("", "A", "Habitat", D.habitat.name) });
     state.playerMarker = null;
     if (state.run) {
       const el = html("div", { class: "mm-marker" });
@@ -695,7 +698,7 @@
       ul.append(li);
     }
     const p = r.plan;
-    $("#plan-info").textContent = `Planner checked ${p.nodes.toLocaleString("en")} search steps over ${p.orders.toLocaleString("en")} possible orders in ${Math.max(1, Math.round(p.ms))} ms. Best order: ${r.allStops.map((s) => s.order + " " + s.name.split(" ").slice(0, 2).join(" ")).join(" → ")}.${p.relaxed ? " One target is boxed in by hazards, so the route crosses the narrowest gap it could find. Check the map before you go." : ""}`;
+    $("#plan-info").textContent = `Planner checked ${p.nodes.toLocaleString("en")} search steps over ${p.orders.toLocaleString("en")} possible orders in ${Math.max(1, Math.round(p.ms))} ms. Best order: ${r.allStops.map((s) => s.order + " " + s.name.split(" ").slice(0, 2).join(" ")).join(" → ")}.${p.relaxed ? " Some targets sit on steep ground or among hazards this route type normally avoids, so it crosses the shortest stretch it has to. Check the map before you go." : ""}`;
   }
 
   function toggleObjective(id, on) {
@@ -708,7 +711,7 @@
   function renderWaypoints(r, m) {
     const ol = $("#waypoints"); ol.innerHTML = "";
     ol.style.setProperty("--route-color", r.color);
-    const items = [{ badge: "A", cls: "", name: "Habitat", km: 0, pos: D.habitat.pos, sub: "Board the rover and head out" }];
+    const items = [{ badge: "A", cls: "", name: "Habitat", km: 0, pos: D.habitat.pos, sub: `${D.habitat.name}. Board the rover and head out` }];
     for (const s of r.allStops) {
       items.push({ badge: String(s.order), cls: s.main ? "target" : "stop", name: s.name, km: s.at * r.km, pos: s.pos, sub: `${TYPE[s.type].label} · ${s.minutes} min · +${s.points} pts. ${s.detail}`, photo: s.id });
     }
@@ -861,7 +864,7 @@
     $("#stop-detail").textContent = stop.detail;
     renderPhoto($("#stop-photo"), stop.id, stop.name);
     const b = $("#btn-sample"); b.innerHTML = "";
-    const verb = { sample: "Collect sample", photo: "Take photos", measure: "Take measurement" }[stop.type] || "Collect sample";
+    const verb = { sample: "Collect sample", photo: "Take photos", measure: "Take measurement", sightsee: "Take photos for the next crew" }[stop.type] || "Collect sample";
     b.append(document.createTextNode(`${verb} · +${stop.points} pts `), html("kbd", { class: "key" }, "S"));
     $("#stop-card").hidden = false;
     $("#stop-card").scrollIntoView({ block: "nearest", behavior: "smooth" });
@@ -874,7 +877,11 @@
     run.science += stop.points; run.done.add(key);
     const mins = stop.minutes || RULES.stopMinutes;
     run.minutes += mins; run.o2 -= RULES.stopO2; run.dose += mins * RULES.dosePerMinute;
-    run.log.push(`Collected a sample at ${stop.name} (+${stop.points} pts)`);
+    if (stop.type === "sightsee") {
+      run.log.push(`Photographed ${stop.name} (+${stop.points} pts) and left it as a view point for the next crew`);
+      highlights.push({ id: `v${Date.now()}`, pos: stop.pos.slice(), tag: "view", title: stop.name, note: stop.detail, by: `You, Sol ${D.sol}` });
+      saveHighlights();
+    } else run.log.push(`${{ photo: "Took photos at", measure: "Took a measurement at" }[stop.type] || "Collected a sample at"} ${stop.name} (+${stop.points} pts)`);
     run.atStop = null;
     $("#stop-card").hidden = true;
     if (stop.main) run.log.push("Main target done");
@@ -1059,10 +1066,19 @@
     return li;
   }
   function renderTaskPage() {
-    const today = $("#task-today"), far = $("#task-far");
-    today.innerHTML = ""; far.innerHTML = "";
-    for (const t of D.tasks) (t.today ? today : far).append(taskCard(t));
-    const nFar = D.tasks.filter((t) => !t.today).length;
+    const today = $("#task-today"), far = $("#task-far"), sight = $("#task-sight");
+    today.innerHTML = ""; far.innerHTML = ""; sight.innerHTML = "";
+    for (const t of D.tasks) (t.group === "sight" ? sight : t.today ? today : far).append(taskCard(t));
+    const nFar = D.tasks.filter((t) => !t.today && t.group !== "sight").length;
+    const land = $("#land-list"); land.innerHTML = "";
+    D.landingSites.forEach((s, i) => {
+      const b = html("button", { class: "land", type: "button", role: "radio", "aria-checked": String(s.id === state.draftLanding) });
+      const top = html("span", { class: "land-top" });
+      top.append(html("span", { class: "land-dot", "aria-hidden": "true" }, "A"), html("span", { class: "title-3" }, s.name));
+      b.append(top, html("span", { class: "body-6 muted" }, s.note));
+      b.addEventListener("click", () => { state.draftLanding = s.id; renderTaskPage(); document.querySelectorAll("#land-list .land")[i].focus({ preventScroll: true }); });
+      land.append(b);
+    });
     $("#btn-more-tasks span").textContent = far.hidden ? `Show ${nFar} tasks farther away` : "Hide tasks farther away";
     updateTaskSummary();
   }
@@ -1073,11 +1089,12 @@
     if (!picked.length) { $("#tasks-summary").textContent = "No tasks picked yet. Tick at least one."; return; }
     const pts = picked.reduce((s, t) => s + t.points, 0), mins = picked.reduce((s, t) => s + t.minutes, 0);
     const far = Math.max(...picked.map(habKm));
-    $("#tasks-summary").innerHTML = `<strong>${picked.length}</strong> task${picked.length > 1 ? "s" : ""} · <strong>+${pts}</strong> pts · ${Math.floor(mins / 60) ? Math.floor(mins / 60) + " h " : ""}${mins % 60} min on site · farthest stop ${far.toFixed(1)} km from the habitat`;
+    $("#tasks-summary").innerHTML = `<strong>${picked.length}</strong> task${picked.length > 1 ? "s" : ""} · <strong>+${pts}</strong> pts · ${Math.floor(mins / 60) ? Math.floor(mins / 60) + " h " : ""}${mins % 60} min on site · farthest stop ${far.toFixed(1)} km from ${landingOf(state.draftLanding).name}`;
   }
   function openTasks() {
     const again = state.planned;
     state.draft = new Set(again ? state.selected[TODAY.id] : []);
+    state.draftLanding = state.landing;
     $("#tasks-title").textContent = again ? "Change your mind?" : "What do you want to do today?";
     $("#tasks-sub").textContent = again
       ? "Add or drop tasks. When you confirm, the planner redesigns all three routes."
@@ -1094,6 +1111,9 @@
     const go = $("#btn-tasks-go"); go.disabled = true; go.firstChild.textContent = "Planning… ";
     setTimeout(() => { // let the button repaint before the planner runs
       state.selected[TODAY.id] = new Set(state.draft);
+      state.landing = state.draftLanding;
+      const site = landingOf(state.landing);
+      D.habitat.pos = site.pos.slice(); D.habitat.name = site.name;
       planMission(TODAY);
       state.routeIdx = 0; state.planned = true;
       setScreen("plan");
@@ -1110,7 +1130,7 @@
     const far = $("#task-far"); far.hidden = !far.hidden;
     $("#btn-more-tasks").setAttribute("aria-expanded", String(!far.hidden));
     $("#btn-more-tasks i").className = `ph ${far.hidden ? "ph-caret-down" : "ph-caret-up"}`;
-    $("#btn-more-tasks span").textContent = far.hidden ? `Show ${D.tasks.filter((t) => !t.today).length} tasks farther away` : "Hide tasks farther away";
+    $("#btn-more-tasks span").textContent = far.hidden ? `Show ${D.tasks.filter((t) => !t.today && t.group !== "sight").length} tasks farther away` : "Hide tasks farther away";
   });
 
   // ---------- Wiring ----------

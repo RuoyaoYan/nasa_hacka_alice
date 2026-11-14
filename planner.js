@@ -238,11 +238,14 @@
   }
 
   // ---------- Dijkstra (binary heap) from one cell to all cells ----------
-  function dijkstra(G, src, W) {
+  function costArray(G, W, win) {
+    const cost = new Float32Array(G.N).fill(Infinity);
+    for (let r = win.r0; r <= win.r1; r++) for (let c = win.c0; c <= win.c1; c++) { const i = r * G.cols + c; cost[i] = cellCost(G, i, W); }
+    return cost;
+  }
+  function dijkstra(G, src, W, cost) {
     const { rows, cols, N, cellKm } = G;
     const dist = new Float64Array(N).fill(Infinity), prev = new Int32Array(N).fill(-1);
-    const cost = new Float32Array(N);
-    for (let i = 0; i < N; i++) cost[i] = cellCost(G, i, W);
     const heap = [], push = (d, i) => { heap.push([d, i]); let k = heap.length - 1; while (k) { const p = (k - 1) >> 1; if (heap[p][0] <= heap[k][0]) break; [heap[p], heap[k]] = [heap[k], heap[p]]; k = p; } };
     const pop = () => { const top = heap[0], last = heap.pop(); if (heap.length) { heap[0] = last; let k = 0; for (;;) { const l = 2 * k + 1, r = l + 1; let m = k; if (l < heap.length && heap[l][0] < heap[m][0]) m = l; if (r < heap.length && heap[r][0] < heap[m][0]) m = r; if (m === k) break; [heap[m], heap[k]] = [heap[k], heap[m]]; k = m; } } return top; };
     dist[src] = 0; push(0, src);
@@ -399,13 +402,19 @@
       }
     }
     // one Dijkstra per point; relax rules once if something is unreachable
-    let runs = cells.map((c) => dijkstra(G, c, W));
+    // search only around the stops (4 km margin) so a big map stays fast
+    const rc = cells.map((c) => [(c / G.cols) | 0, c % G.cols]), m = Math.round(4 / G.cellKm);
+    const win = { r0: Math.max(0, Math.min(...rc.map((x) => x[0])) - m), r1: Math.min(G.rows - 1, Math.max(...rc.map((x) => x[0])) + m),
+      c0: Math.max(0, Math.min(...rc.map((x) => x[1])) - m), c1: Math.min(G.cols - 1, Math.max(...rc.map((x) => x[1])) + m) };
+    let cost = costArray(G, W, win);
+    let runs = cells.map((c) => dijkstra(G, c, W, cost));
     let relaxed = false, runW = W;
     const unreachable = () => runs.some((run) => cells.some((c) => run.dist[c] === Infinity));
     if (unreachable()) {
       relaxed = true;
       const W2 = Object.assign({}, W, { relax: true });
-      runs = cells.map((c) => dijkstra(G, c, W2));
+      cost = costArray(G, W2, win);
+      runs = cells.map((c) => dijkstra(G, c, W2, cost));
       runW = W2;
     }
     const C = runs.map((run) => cells.map((c) => run.dist[c]));

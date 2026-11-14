@@ -31,10 +31,20 @@
     neretva:    [18.4985, 77.3365],
     rimSlope:   [18.4602, 77.3168],
     lookout:    [18.4705, 77.3018],
-    rimSouth:   [18.4545, 77.3052]
+    rimSouth:   [18.4545, 77.3052],
+    // sightseeing viewpoints
+    belvaRim:   [18.4915, 77.3628],
+    kodiakView: [18.4338, 77.4002],
+    seitahSouth:[18.4120, 77.4195],
+    neretvaView:[18.5085, 77.3455],
+    rimSkyline: [18.4285, 77.3555],
+    // other landing sites
+    forksPlain: [18.4488, 77.4085],
+    fanCamp:    [18.4842, 77.3785],
+    floorSouth: [18.3985, 77.4380]
   };
 
-  const sample = "sample", photo = "photo", measure = "measure";
+  const sample = "sample", photo = "photo", measure = "measure", sightsee = "sightsee";
 
   window.MOMOOT_DATA = {
     sol: 23,
@@ -42,7 +52,15 @@
     conditions: { dust: "Low", tempC: -38, radiation: "Normal" },
     places: P,
     habitat: { pos: P.habitat, name: "Habitat" },
-    planArea: [[18.405, 77.285], [18.515, 77.470]],
+    // Where the crew landed: the habitat, start and end of every tour
+    landingSites: [
+      { id: "butler", pos: P.habitat, name: "Octavia E. Butler Landing", note: "Perseverance's real landing site. Flat crater floor, close to Séítah and the delta front." },
+      { id: "forks", pos: P.forksPlain, name: "Three Forks plain", note: "Beside the sample depot at the foot of the delta. Short drives to Hawksbill Gap." },
+      { id: "fan", pos: P.fanCamp, name: "Upper fan camp", note: "On top of the delta. Belva crater and the rim are close, the crater floor is far." },
+      { id: "south", pos: P.floorSouth, name: "Southern crater floor", note: "Open plains south of Séítah. Long, flat drives to everything." }
+    ],
+    // ~14 x 17 km of Jezero: crater floor, Séítah, the delta, Belva and the western rim
+    planArea: [[18.350, 77.240], [18.575, 77.545]],
 
     landmarks: [
       { pos: P.landing, name: "Octavia E. Butler Landing", note: "Perseverance landing site, 2021" }
@@ -53,7 +71,9 @@
       sand: [
         { pos: [18.4262, 77.4185], rx: 1.5, ry: 0.75 },   // Séítah ripple field
         { pos: [18.4515, 77.3395], rx: 0.9, ry: 1.4 },    // sand sheet at the foot of the rim
-        { pos: [18.4440, 77.3700], rx: 0.8, ry: 0.5 }
+        { pos: [18.4440, 77.3700], rx: 0.8, ry: 0.5 },
+        { pos: [18.4060, 77.4120], rx: 1.2, ry: 0.6 },    // South Séítah dunes
+        { pos: [18.5060, 77.3320], rx: 0.7, ry: 1.0 }     // dunes in Neretva Vallis
       ],
       boulders: [
         { pos: [18.4562, 77.4178], r: 0.38 },
@@ -88,7 +108,13 @@
       { id: "nv", pos: P.neretva, type: photo, name: "Neretva Vallis inlet", points: 120, minutes: 25, detail: "The river channel that once filled the lake." },
       { id: "lh", pos: P.lookout, type: sample, name: "Rim rock at Lookout Hill", points: 600, minutes: 60, detail: "Ancient crust lifted by the impact, with views out over Nili Planum." },
       { id: "rs", pos: P.rimSlope, type: measure, name: "Radiation on the rim slope", points: 80, minutes: 30, detail: "Compare the dose on open slopes with the crater floor." },
-      { id: "sr", pos: P.rimSouth, type: sample, name: "Southern rim outcrop", points: 100, minutes: 35, detail: "Altered rock that may record ancient hot springs." }
+      { id: "sr", pos: P.rimSouth, type: sample, name: "Southern rim outcrop", points: 100, minutes: 35, detail: "Altered rock that may record ancient hot springs." },
+      // Sightseeing: drive to a viewpoint, take photos, and leave them for the next crew
+      { id: "vb", pos: P.belvaRim, type: sightsee, group: "sight", name: "Belva crater panorama", points: 90, minutes: 25, detail: "Stand on Echo Creek, where Perseverance took its 152 image mosaic, and look across the 900 m crater." },
+      { id: "vk", pos: P.kodiakView, type: sightsee, group: "sight", name: "Kodiak at sunrise", points: 60, minutes: 20, detail: "Early light picks out the layers in the butte. Photograph it before the shadows go." },
+      { id: "vs", pos: P.seitahSouth, type: sightsee, group: "sight", name: "South Séítah ridges", points: 70, minutes: 20, detail: "Rocky ridges rising out of the dunes, some of the oldest rock in the crater." },
+      { id: "vn", pos: P.neretvaView, type: sightsee, group: "sight", name: "Neretva Vallis overlook", points: 110, minutes: 30, detail: "Look down the dry river channel that once filled Jezero's lake." },
+      { id: "vr", pos: P.rimSkyline, type: sightsee, group: "sight", name: "Jezero rim skyline", points: 50, minutes: 15, detail: "The whole western rim in one frame, 300 m high and 20 km long." }
     ],
 
     // Real Perseverance photos of the same place (or the nearest one it imaged).
@@ -108,6 +134,11 @@
       nv: { pia: "PIA26335", url: "photojournal/pia/pia26/pia26335/PIA26335.jpg", caption: "Neretva Vallis river channel, Mastcam-Z, sol 1152" },
       lh: { pia: "PIA26511", url: "photojournal/pia/pia26/pia26511/PIA26511.jpg", caption: "First view over the rim from Lookout Hill, Navcam, sol 1354", credit: "NASA/JPL-Caltech" },
       rs: { pia: "PIA26373", url: "photojournal/pia/pia26/pia26373/PIA26373.jpg", caption: "The climb up Jezero's rim, Mastcam-Z, sol 1233" },
+      vb: { pia: "PIA25889", url: "mars/resources/detail_files/2/7/27471_PIA25889-web.jpg", caption: "Belva crater from Echo Creek, Mastcam-Z, sol 772" },
+      vk: { pia: "PIA24802", url: "mars/resources/detail_files/2/6/26413_Sol0057_zcam08103_Z110_R0E_web.jpg", caption: "Kodiak butte, Mastcam-Z, sol 57" },
+      vs: { pia: "PIA24816", url: "mars/internal_resources/1155.jpeg", caption: "South Séítah ridges, Mastcam-Z, sol 210" },
+      vn: { pia: "PIA26335", url: "photojournal/pia/pia26/pia26335/PIA26335.jpg", caption: "Looking down Neretva Vallis, Mastcam-Z, sol 1152" },
+      vr: { pia: "PIA24264", url: "mars/resources/detail_files/2/5/25643_PIA24264-Panorama_supplement-crater-rim.jpg", caption: "Jezero's rim from the crater floor, Mastcam-Z, sol 2" },
       sr: { pia: "PIA24264", url: "mars/resources/detail_files/2/5/25643_PIA24264-Panorama_supplement-crater-rim.jpg", caption: "Jezero crater rim, Mastcam-Z, sol 2" }
     },
 
