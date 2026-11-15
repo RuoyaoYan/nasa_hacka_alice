@@ -238,9 +238,12 @@ the closer they get to anything the HiRISE scan found (fading out over a few
 hundred metres). Lines are not straightened afterwards, so every bend the costs
 ask for stays: the route weaves between boulders and rough patches.
 
-**Map area.** About 17 × 22 km: Jezero's crater floor, Séítah, the delta, Belva,
+**Map area.** About 21 × 29 km: Jezero's crater floor, Séítah, the delta, Belva,
 the western rim and, beyond it, **Lac de Charmes**, where Perseverance has driven
-since late 2025. The new tasks there (Falbreen, Kerrlaguna, Scotiafjellet,
+since late 2025. Every landing site sits at least 3 km inside it. The hazard scan
+covers all of it: HiRISE where the Jezero mosaic exists, CTX for the strips around
+it (Lac de Charmes is west of the HiRISE mosaic). The terrain model's rim and Lac de
+Charmes heights match Perseverance's measured elevations to about 30 m on average. The new tasks there (Falbreen, Kerrlaguna, Scotiafjellet,
 Arathusa, Arbot, Idubi) sit at Perseverance's real positions on those sols
 (NASA/JPL M20 waypoints). Landing site E puts the habitat there. Terrain events (boulders, sand) fire where the
 chosen route actually enters those zones.
