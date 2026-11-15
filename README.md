@@ -11,7 +11,11 @@ and rough terrain force you to adapt on the way.
 
 **https://ruoyaoyan.github.io/nasa_hacka_alice/**
 
-(Served by GitHub Pages. If the link shows a 404, turn Pages on once: Settings → Pages → Deploy from a branch → `main`, folder `/ (root)`.)
+Served by GitHub Pages from the `momoot` branch: every push or merge to `momoot` goes live about a minute later.
+
+**Recording a demo video?** Open **https://ruoyaoyan.github.io/nasa_hacka_alice/?demo=1** to start with a dust storm:
+the storm event shows up early on every route, and sightseeing and rim climbs are closed (grey).
+Turn it off with **[`?demo=0`](https://ruoyaoyan.github.io/nasa_hacka_alice/?demo=0)** or in **Settings → Developers only → Demo weather**.
 
 ![Route planner on the crater rim expedition](docs/screenshots/planner_rim_mock_tiles.png)
 
@@ -27,7 +31,7 @@ No install and no build step. Either:
   ```
 
 To publish it, turn on **GitHub Pages** for this repo (Settings → Pages →
-deploy from branch) and share the link.
+Deploy from a branch → `momoot`, folder `/ (root)`) and share the link.
 
 ### Controls
 
