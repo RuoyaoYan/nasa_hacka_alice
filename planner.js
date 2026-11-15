@@ -35,18 +35,31 @@
       const lonFront = 77.409 - (lat - 18.445) * 0.27;
       const gapW = 0.0012 + 0.0045 * gauss(lat - T.hawksbill[0], 0.0028); // the gap softens the scarp
       const inDeltaLat = S((lat - 18.441) / 0.0025);
-      const delta = inDeltaLat * (50 * S((lonFront - lon) / gapW) + 200 * clamp((lonFront - lon) / 0.1, 0, 1));
+      // the delta lies inside the crater: it ends at the rim (no step across the plains beyond)
+      const insideRim = S((lon - (77.291 - (lat - 18.47) * 0.3 - 0.026)) / 0.008);
+      const delta = insideRim * inDeltaLat * (50 * S((lonFront - lon) / gapW) + 200 * clamp((lonFront - lon) / 0.1, 0, 1));
       // western rim: crest line runs slightly north east, notched by Neretva Vallis
       const rimLon = 77.291 - (lat - 18.47) * 0.3;
-      const notch = 1 - 0.6 * gauss(lat - T.neretva[0], 0.006);
+      // Neretva Vallis cuts a notch through the rim; it fades out west of the crest (no canyon across the plains)
+      const notch = 1 - 0.6 * gauss(lat - T.neretva[0], 0.006) * S((lon - (rimLon - 0.065)) / 0.012);
       const rim = 560 * notch * S((rimLon - lon) / 0.007);
+      // rim crest (Lookout Hill about +785 m) and, beyond it, the plains of "Lac de Charmes":
+      // valleys and ridges about +590 to +640 m (Perseverance waypoints, sols 1700 to 2022)
+      const crestLon = rimLon - 0.026;
+      const crest = 100 * notch * gauss(lon - crestLon, 0.02);
+      const beyond = S((crestLon - 0.03 - lon) / 0.008);
+      const ridges = beyond * (40 + 12 * Math.sin((lat * 0.8 + lon) * 260) * Math.cos((lat - lon * 0.4) * 180));
       // Kodiak butte and Belva crater
       const kodiak = 55 * S((0.32 - kmTo([lat, lon], T.kodiak)) / 0.05);
       const db = kmTo([lat, lon], T.belva);
       const belva = -45 * gauss(db, 0.28) + 22 * gauss(db - 0.45, 0.1);
-      return delta + rim + kodiak + belva;
+      return delta + rim + crest + ridges + kodiak + belva;
     };
   }
+
+  // Terrain zones drawn from data (approximate outlines): codes stored per grid cell
+  const ZONES = { margin: 1, channel: 2, megabreccia: 3 };
+  const rimCrestLon = (lat) => 77.291 - (lat - 18.47) * 0.3 - 0.026;
 
   // ---------- Grid ----------
   function buildGrid(D) {
@@ -58,6 +71,7 @@
     const rows = Math.ceil((n - s) / dLat), cols = Math.ceil((e - w) / dLon);
     const N = rows * cols;
     const elev = new Float32Array(N), slope = new Float32Array(N), sand = new Float32Array(N), rock = new Uint8Array(N);
+    const zone = new Uint8Array(N); // terrain zones from D.terrainZones (ZONES codes)
     const hd = new Float32Array(N).fill(Infinity); // metres to the nearest detected hazard
     const ext = new Uint8Array(N); // hazards from real data: 1 slope, 2 crater, 4 rock (terrain_hazard tool), 32 relief, 64 rough (HiRISE scan)
     const elevAt = makeElevation(T);
@@ -73,6 +87,10 @@
       }
       sand[i] = sv;
       for (const b of D.hazards.boulders) if (kmTo(p, b.pos) < b.r) rock[i] = 1;
+      for (const z of D.terrainZones || []) {
+        const dy = (p[0] - z.pos[0]) * KM_PER_DEG / z.ry, dx = (p[1] - z.pos[1]) * KM_PER_DEG * kLon / z.rx;
+        if (Math.hypot(dx, dy) < 1 && ZONES[z.type]) zone[i] = ZONES[z.type];
+      }
     }
     for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
       const i = r * cols + c;
@@ -80,7 +98,7 @@
       const ey = (elev[Math.min(rows - 1, r + 1) * cols + c] - elev[Math.max(0, r - 1) * cols + c]) / (2 * cellKm * 1000);
       slope[i] = (Math.atan(Math.hypot(ex, ey)) * 180) / Math.PI;
     }
-    return { rows, cols, N, s, w, n, e, dLat, dLon, cellKm, elev, slope, sand, rock, ext, hd, ll, elevAt, kmTo,
+    return { rows, cols, N, s, w, n, e, dLat, dLon, cellKm, elev, slope, sand, rock, zone, ext, hd, ll, elevAt, kmTo, belva: T.belva,
       cellOf: (p) => clamp(Math.floor((n - p[0]) / dLat), 0, rows - 1) * cols + clamp(Math.floor((p[1] - w) / dLon), 0, cols - 1) };
   }
 
@@ -89,6 +107,7 @@
   const CLEAR_M = 50;   // safe routes never come closer than this to a detected hazard
   const BUFFER_M = 70;
   const RELAX_PEN = 150;  // extra cost fades out over this distance beyond the margin
+  const DETAIL_M = 450;   // detected detail (hills, boulders, rough ground) affects cost out to this distance
   function cellCost(G, i, W) {
     const sl = G.slope[i];
     const safe = W.rock === Infinity;
@@ -98,7 +117,7 @@
     let pen = 0;
     if (G.exempt && G.exempt[i]) return 1 + 4 * clamp((sl - 5) / 10, 0, 1.5) + (x & BLOCK_BITS ? 6 : 0); // a target's own approach
     if (sl > W.maxSlope) { if (!W.relax || sl > 40) return Infinity; pen += RELAX_PEN; }
-    if (safe && G.rock[i]) { if (!W.relax) return Infinity; pen += RELAX_PEN; }
+    if (safe && (G.rock[i] || G.zone[i] === ZONES.megabreccia)) { if (!W.relax) return Infinity; pen += RELAX_PEN; }
     if (safe && (x & BLOCK_BITS)) { if (!W.relax) return Infinity; pen += RELAX_PEN; }
     else if (safe && hd < CLEAR_M) { if (!W.relax) return Infinity; pen += RELAX_PEN * (0.3 + 0.7 * (1 - hd / CLEAR_M)); }
     const steep = clamp((sl - 5) / 10, 0, 1.5);
@@ -112,6 +131,12 @@
       c += 0.8 * t * t;
     }
     if (x & 64) c += 0.4 + (W.rock === Infinity ? 0.6 : 0.2); // rough ground is slower
+    // detail seen in the HiRISE scan (hills, boulders, small craters, rough ground): every profile
+    // pays a little more the closer it gets, so routes weave between them instead of cutting across
+    if (W.detail && hd < DETAIL_M) c += W.detail * Math.exp(-hd / 120);
+    if (W.detail && (x & 64)) c += 0.5 * W.detail;
+    if (W.terrain) c += W.terrain[terrainAt(i)] || 0;   // each profile likes or dislikes each terrain type
+    if (G.avoid && W.avoid && G.avoid[i]) c += W.avoid * G.avoid[i]; // keep away from the other route options
     return c + pen;
   }
 
@@ -184,14 +209,40 @@
     pointHazards = list;
     refreshHd();
   }
+  // Terrain type of a grid cell
+  function terrainAt(c) {
+    const r = (c / G.cols) | 0, k = c % G.cols;
+    const lat = G.n - (r + 0.5) * G.dLat, lon = G.w + (k + 0.5) * G.dLon;
+    const z = G.zone[c];
+    if (G.sand[c] > 0.35) return "sand";
+    if (z === ZONES.megabreccia) return "megabreccia";
+    if (G.kmTo([lat, lon], G.belva) < 0.42) return "crater";
+    if (z === ZONES.channel) return "channel";
+    if (lon < rimCrestLon(lat) - 0.012) return "ridges";
+    if (z === ZONES.margin) return "margin";
+    if (lon < 77.345 && G.elev[c] > 120) return "rim";
+    const lonFront = 77.405 - (lat - 18.445) * 0.27;
+    return lat > 18.441 && lon < lonFront ? "delta" : "floor";
+  }
+  const TERRAIN_COLORS = { floor: [201, 206, 214], delta: [116, 169, 160], margin: [170, 140, 200], channel: [95, 150, 205], crater: [230, 140, 90],
+    rim: [166, 172, 182], ridges: [190, 120, 95], megabreccia: [240, 236, 220], sand: [226, 195, 110] };
+  // Map layer: every terrain type in its own colour, at the grid's 50 m resolution
+  function terrainImage(D) {
+    if (!G) G = buildGrid(D);
+    const cv = document.createElement("canvas"); cv.width = G.cols; cv.height = G.rows;
+    const ctx = cv.getContext("2d"), img = ctx.createImageData(G.cols, G.rows);
+    for (let i = 0; i < G.N; i++) { const col = TERRAIN_COLORS[terrainAt(i)]; img.data.set([col[0], col[1], col[2], 120], i * 4); }
+    ctx.putImageData(img, 0, 0);
+    return { url: cv.toDataURL(), bounds: [[G.s, G.w], [G.n, G.e]] };
+  }
+
   // What the ground is like at a point (for the terrain and surface breakdown)
   function classify(lat, lon) {
     const c = G.cellOf([lat, lon]);
-    const lonFront = 77.405 - (lat - 18.445) * 0.27;
-    const terrain = G.sand[c] > 0.35 ? "sand" : lon < 77.345 && G.elev[c] > 120 ? "rim" : lat > 18.441 && lon < lonFront ? "delta" : "floor";
+    const terrain = terrainAt(c);
     let surface = "bedrock";
     const hd = hazardDist(lat, lon);
-    if (G.rock[c] || hd < 1) surface = "boulders";
+    if (G.rock[c] || hd < 1 || terrain === "megabreccia") surface = "boulders";
     else if (G.sand[c] > 0.35) surface = "sand";
     else if (G.ext[c] & 64) surface = "rough";
     else if (G.slope[c] > 6) surface = "gravel";
@@ -201,9 +252,10 @@
 
   // Merge a hazard mask (any resolution, lat/lon bounds) into the grid.
   // A planner cell takes a bit when more than `frac` of its pixels carry it.
-  function mergeMask(D, m, frac = 0.12) {
+  // skip: optional [[s, w], [n, e]] area to leave out (already scanned at higher resolution)
+  function mergeMask(D, m, frac = 0.12, skip = null) {
     if (!G) G = buildGrid(D);
-    addField(m, [D.habitat.pos, ...D.missions.flatMap((ms) => ms.objectives.map((ob) => ob.pos))]);
+    addField(m, [D.habitat.pos, ...(D.landingSites || []).map((l) => l.pos), ...D.missions.flatMap((ms) => ms.objectives.map((ob) => ob.pos))]);
     const [[ms, mw], [mn, me]] = m.bounds;
     const tot = new Uint32Array(G.N), hits = {};
     const bitList = [1, 2, 4, 32, 64];
@@ -215,6 +267,7 @@
       for (let x = 0; x < m.width; x++) {
         const lon = mw + ((x + 0.5) / m.width) * (me - mw);
         if (lon < G.w || lon > G.e) continue;
+        if (skip && lat > skip[0][0] && lat < skip[1][0] && lon > skip[0][1] && lon < skip[1][1]) continue;
         const c = Math.floor((lon - G.w) / G.dLon);
         if (r < 0 || c < 0 || r >= G.rows || c >= G.cols) continue;
         const i = r * G.cols + c, v = m.bits[y * m.width + x];
@@ -223,7 +276,7 @@
       }
     }
     // the habitat and every target must stay reachable: clear hazards within ~75 m of them
-    const keep = [D.habitat.pos, ...D.missions.flatMap((ms) => ms.objectives.map((ob) => ob.pos))];
+    const keep = [D.habitat.pos, ...(D.landingSites || []).map((l) => l.pos), ...D.missions.flatMap((ms) => ms.objectives.map((ob) => ob.pos))];
     for (const pt of keep) {
       const c0 = G.cellOf(pt), r0 = (c0 / G.cols) | 0, k0 = c0 % G.cols;
       for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
@@ -271,6 +324,22 @@
     return { dist, prev };
   }
 
+  // Cells near the other route options (fading out over ~250 m), so each option takes its own line
+  function avoidField(lines, win) {
+    const f = new Float32Array(G.N), R = 5; // cells (250 m)
+    for (const line of lines) for (let k = 0; k < line.length; k += 2) {
+      const c0 = G.cellOf(line[k]), r0 = (c0 / G.cols) | 0, k0 = c0 % G.cols;
+      for (let dr = -R; dr <= R; dr++) for (let dc = -R; dc <= R; dc++) {
+        const rr = r0 + dr, cc = k0 + dc;
+        if (rr < win.r0 || cc < win.c0 || rr > win.r1 || cc > win.c1) continue;
+        const d = Math.hypot(dr, dc); if (d > R) continue;
+        const i = rr * G.cols + cc, v = 1 - d / (R + 1);
+        if (!G.exempt[i] && v > f[i]) f[i] = v;
+      }
+    }
+    return f;
+  }
+
   // ---------- DFS with branch and bound over visiting orders ----------
   function bestOrder(C) {
     const n = C.length - 1; // index 0 is the habitat
@@ -294,36 +363,6 @@
     })(0);
     let fact = 1; for (let k = 2; k <= n; k++) fact *= k;
     return { order: bestPath || [...Array(n + 1).keys()], cost: best, nodes, orders: fact };
-  }
-
-  // String pulling: replace grid zigzags with straight segments wherever the
-  // straight line is just as safe (no cell costlier than the path it replaces).
-  function pullString(cells, W) {
-    if (cells.length < 3) return cells;
-    const out = [cells[0]];
-    const rc = (i) => [(i / G.cols) | 0, i % G.cols];
-    let a = 0;
-    while (a < cells.length - 1) {
-      let best = a + 1;
-      let maxCost = 1;
-      const fin = (x) => (x === Infinity ? 60 : x); // targets can sit on steep cells; never let that open the gate
-      for (let b = a + 1; b < cells.length && b < a + 40; b++) {
-        maxCost = Math.max(maxCost, fin(cellCost(G, cells[b], W)));
-        const [r0, c0] = rc(cells[a]), [r1, c1] = rc(cells[b]);
-        const steps = Math.ceil(Math.hypot(r1 - r0, c1 - c0) * 4);
-        let ok = true;
-        for (let s = 1; s < steps && ok; s++) {
-          const r = Math.floor(r0 + 0.5 + ((r1 - r0) * s) / steps), c = Math.floor(c0 + 0.5 + ((c1 - c0) * s) / steps);
-          const i = r * G.cols + c;
-          const cc = cellCost(G, i, W);
-          if (cc === Infinity || cc > maxCost * 1.05) ok = false;
-        }
-        if (ok) best = b;
-      }
-      out.push(cells[best]);
-      a = best;
-    }
-    return out;
   }
 
   // Chaikin corner cutting: turns grid staircases into smooth driven curves
@@ -350,6 +389,38 @@
       for (let k = 1; k <= n; k++) out.push([a[0] + ((b[0] - a[0]) * k) / n, a[1] + ((b[1] - a[1]) * k) / n]);
     }
     return out;
+  }
+
+  // ---------- Driving wobble (visual only) ----------
+  // A real drive is never a clean line, so each leg gets a small, smooth sideways wobble
+  // (up to ~30 m, a few overlapping waves). It is NOT derived from data. It is the same every
+  // time for the same leg (seeded), fades to zero near stops, and shrinks wherever it would
+  // touch a forbidden cell or come closer to a detected hazard than the route allows.
+  const WOBBLE_M = [18, 9, 4], WOBBLE_KM = [0.36, 0.17, 0.08], WOBBLE_TAPER_KM = 0.12;
+  function seeded(str) { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return () => { h = Math.imul(h ^ (h >>> 15), 2246822507); h = Math.imul(h ^ (h >>> 13), 3266489909); return ((h ^= h >>> 16) >>> 0) / 4294967296; }; }
+  function wobble(leg, W, seed) {
+    if (leg.length < 4) return leg;
+    const rnd = seeded(seed), phase = WOBBLE_M.map(() => rnd() * Math.PI * 2), kLon = Math.cos((leg[0][0] * Math.PI) / 180);
+    const cum = [0];
+    for (let i = 1; i < leg.length; i++) cum.push(cum[i - 1] + G.kmTo(leg[i - 1], leg[i]));
+    const L = cum[cum.length - 1];
+    if (L < 2 * WOBBLE_TAPER_KM) return leg;
+    const safe = W.rock === Infinity, minHd = safe ? CLEAR_M + 10 : 0;
+    const ok = (p) => { const c = G.cellOf(p), x = cellCost(G, c, W); return x !== Infinity && (!safe || hazardDist(p[0], p[1]) >= minHd); };
+    const out = leg.map((p, i) => {
+      if (i === 0 || i === leg.length - 1) return p;
+      const sKm = cum[i], taper = Math.min(1, sKm / WOBBLE_TAPER_KM, (L - sKm) / WOBBLE_TAPER_KM);
+      let m = 0; for (let k = 0; k < WOBBLE_M.length; k++) m += WOBBLE_M[k] * Math.sin((sKm / WOBBLE_KM[k]) * Math.PI * 2 + phase[k]);
+      m *= taper * taper * (3 - 2 * taper);
+      // sideways direction from the neighbours
+      const a = leg[i - 1], b = leg[i + 1], dy = (b[0] - a[0]) * KM_PER_DEG, dx = (b[1] - a[1]) * KM_PER_DEG * kLon, n = Math.hypot(dx, dy) || 1;
+      for (const f of [1, 0.5, 0.25]) {
+        const off = (m * f) / 1000, q = [p[0] + ((dx / n) * off) / KM_PER_DEG, p[1] - ((dy / n) * off) / (KM_PER_DEG * kLon)];
+        if (ok(q)) return q;
+      }
+      return p;
+    });
+    return smooth(out, 1);
   }
 
   // Push points that are too close to a hazard outward along the distance gradient,
@@ -391,7 +462,7 @@
 
   // ---------- Public: plan a tour ----------
   let G = null;
-  function plan(D, targets, W) {
+  function plan(D, targets, W, avoidLines) {
     const t0 = performance.now();
     if (!G) G = buildGrid(D);
     const pts = [D.habitat.pos, ...targets.map((t) => t.pos)];
@@ -410,6 +481,7 @@
     const rc = cells.map((c) => [(c / G.cols) | 0, c % G.cols]), m = Math.round(4 / G.cellKm);
     const win = { r0: Math.max(0, Math.min(...rc.map((x) => x[0])) - m), r1: Math.min(G.rows - 1, Math.max(...rc.map((x) => x[0])) + m),
       c0: Math.max(0, Math.min(...rc.map((x) => x[1])) - m), c1: Math.min(G.cols - 1, Math.max(...rc.map((x) => x[1])) + m) };
+    G.avoid = avoidLines && avoidLines.length && W.avoid ? avoidField(avoidLines, win) : null;
     let cost = costArray(G, W, win);
     let runs = cells.map((c) => dijkstra(G, c, W, cost));
     let relaxed = false, runW = W;
@@ -432,14 +504,16 @@
       const cellsPath = [];
       for (let i = cells[b]; i !== -1 && i !== cells[a]; i = runs[a].prev[i]) cellsPath.push(i);
       cellsPath.reverse();
-      const pulled = pullString([cells[a], ...cellsPath], runW);
-      const leg = [pts[a], ...pulled.slice(1, -1).map((i) => G.ll((i / G.cols) | 0, i % G.cols)), pts[b]];
+      // no straightening: the line follows the cost grid cell by cell (every bend the costs ask for), then is smoothed
+      const path = [cells[a], ...cellsPath];
+      const leg = [pts[a], ...path.slice(1, -1).map((i) => G.ll((i / G.cols) | 0, i % G.cols)), pts[b]];
       let sm = smooth(densifyLeg(leg), 3);
       if (runW.rock === Infinity) sm = hugOutline(sm, CLEAR_M + 10);
+      sm = wobble(sm, runW, `${W.label}|${pts[a]}|${pts[b]}`);
       legs.push(sm);
       line = line.concat(k === 0 ? sm : sm.slice(1));
     }
-    G.exempt = null;
+    G.exempt = null; G.avoid = null;
     return { line, legs, order: order.slice(1).map((k) => k - 1), nodes, orders, ms: performance.now() - t0, relaxed };
   }
 
@@ -505,5 +579,5 @@
     });
   }
 
-  window.MomootPlanner = { plan, analyse, hazardImage, mergeMask, fieldImages, hazardDist, CLEAR_M, classify, setPointHazards, elevAt: (lat, lon) => G.elevAt(lat, lon), grid: () => G, init: (D) => { if (!G) G = buildGrid(D); return G; } };
+  window.MomootPlanner = { plan, analyse, hazardImage, terrainImage, TERRAIN_COLORS, mergeMask, fieldImages, hazardDist, CLEAR_M, classify, setPointHazards, elevAt: (lat, lon) => G.elevAt(lat, lon), grid: () => G, init: (D) => { if (!G) G = buildGrid(D); return G; } };
 })();
