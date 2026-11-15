@@ -274,8 +274,11 @@ body:not([data-screen="eva"]):not([data-screen="event"]):not([data-screen="end"]
 .scan-caption[hidden] { display: none; }
 
 /* ---------- Overlays and modals ---------- */
-.overlay { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; background: rgba(29, 28, 26, 0.45); padding: var(--s-300); transition: opacity var(--t-move) var(--ease); }
-.overlay[hidden] { display: flex; opacity: 0; pointer-events: none; }
+.overlay { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; background: rgba(29, 28, 26, 0.45); padding: var(--s-300); visibility: visible; transition: opacity var(--t-move) var(--ease), visibility 0s linear 0s; }
+/* hidden overlays fade out, then become visibility: hidden. Safari still hit tests a transparent
+   layer for the scroll wheel even with pointer-events: none, so without this a hidden full screen
+   overlay (the entry page) sits on top of the task page and swallows every scroll */
+.overlay[hidden] { display: flex; opacity: 0; pointer-events: none; visibility: hidden; transition: opacity var(--t-move) var(--ease), visibility 0s linear var(--t-move); }
 .overlay[hidden] .modal { transform: translateY(24px); }
 .modal { width: 100%; max-width: 560px; max-height: calc(100vh - 48px); overflow: auto; background: var(--surface); border: 1px solid var(--line-strong); padding: var(--s-400); transition: transform var(--t-move) var(--ease); box-shadow: 0 16px 48px rgba(0,0,0,0.25); }
 .modal > * + * { margin-top: var(--s-100); }
@@ -330,7 +333,7 @@ body:not([data-screen="eva"]):not([data-screen="event"]):not([data-screen="end"]
 .src-table td:first-child { color: var(--text); }
 
 .toast { position: fixed; left: 50%; bottom: var(--s-400); transform: translateX(-50%); z-index: 60; background: var(--text); color: #FFFFFF; padding: var(--s-75) var(--s-100); transition: opacity var(--t-move) var(--ease), transform var(--t-move) var(--ease); }
-.toast[hidden] { display: block; opacity: 0; transform: translateX(-50%) translateY(16px); pointer-events: none; }
+.toast[hidden] { display: block; opacity: 0; transform: translateX(-50%) translateY(16px); pointer-events: none; visibility: hidden; transition: opacity var(--t-move) var(--ease), transform var(--t-move) var(--ease), visibility 0s linear var(--t-move); }
 
 /* ---------- Smaller screens ---------- */
 @media (max-width: 1200px) {
@@ -453,7 +456,7 @@ body:not([data-screen="eva"]):not([data-screen="event"]):not([data-screen="end"]
 /* ---------- Task page ---------- */
 .tasks-page { position: fixed; top: var(--nav-h); left: 0; right: 0; bottom: 0; z-index: 20; background: var(--bg); overflow: auto; overscroll-behavior: contain; display: flex; flex-direction: column; }
 .tasks-page[hidden] { display: none; }
-.tasks-inner { width: 100%; max-width: 1240px; margin: 0 auto; padding: var(--s-400) var(--s-300) var(--s-300); flex: 1; }
+.tasks-inner { width: 100%; max-width: 1240px; margin: 0 auto; padding: var(--s-400) var(--s-300) var(--s-300); flex: 1 0 auto; } /* never shrink to the window height (Safari), so the page always has something to scroll */
 .tasks-head { max-width: 720px; margin-bottom: var(--s-300); }
 .tasks-head > * + * { margin-top: var(--s-75); }
 .task-grid { list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--s-200); }
