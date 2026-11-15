@@ -54,7 +54,7 @@ Deploy from a branch → `momoot`, folder `/ (root)`) and share the link.
    - **Best fit for today**: the next tasks to add, re-ranked on every click by
      priority, how far each one adds to the tour, and which data type is still
      missing.
-   - **Best landing site**: the four landing sites ranked by the shortest tour
+   - **Best landing site**: the five landing sites (A to E) ranked by the shortest tour
      through your tasks (exact visiting order, straight lines plus 30 % for
      detours). The habitat lands at the best one unless you pick another.
    - **EVA budget**: estimated distance, time outside and life support use
@@ -78,7 +78,7 @@ Deploy from a branch → `momoot`, folder `/ (root)`) and share the link.
 |---|---|
 | Route details | Elevation profile on the Mars datum (Jezero floor about −2,560 m), steep stretches in orange, target markers. Click and drag to get uphill, downhill, highest and lowest point for that part; it is highlighted on the map |
 | Climbs and descents | Each climb or descent with category, average grade, height gain and length. Click one to select it |
-| Terrain types and surfaces | Kilometres of crater floor, delta deposits, rim slopes and sand fields, and of bedrock, gravel, loose sand, rough ground and boulders |
+| Terrain types and surfaces | Kilometres of each of nine terrain types (crater floor, delta deposits, Margin unit, Neretva Vallis channel, Belva crater, rim slopes, Lac de Charmes valleys and ridges, megabreccia blocks, sand ripple fields), and of bedrock, gravel, loose sand, rough ground and boulders. *Layers → Terrain types* shows them on the map |
 | Weather | Perseverance MEDA's latest sols: high and low temperature, pressure, sunrise and sunset, live from NASA's feed when the browser can reach it. Dust opacity for the season from the Montabone dust climatology |
 | Crew intel on this route | Every crew note within 200 m of the selected route, in the order you will pass it, with how many later crews confirmed it |
 | Crew photo points | The shared map of notes and HiRISE snapshots left by earlier crews and by you |
@@ -213,12 +213,22 @@ danger on the way. `planner.js` solves exactly that:
 4. **Natural lines.** Grid zigzags are straightened where a straight line is just
    as safe (string pulling), then smoothed with Chaikin corner cutting.
 
-The three options use different risk weights: **Safest** forbids slopes over 12°
-and every boulder field, **Fastest** accepts sand, rocks and slopes up to 25°,
-and **Easiest** keeps to gentle ground (slopes under 9°, long detours around sand)
-so it is longer but has the least climbing. Press
+The three options use different risk weights and a cost for each terrain type:
+**Safest** forbids slopes over 12°, every boulder field and megabreccia,
+**Fastest** accepts sand, rocks and slopes up to 25°, and **Easiest** keeps to
+flat crater floor and channels (slopes under 8°, long detours around sand, ridges
+and rough rock). They are planned in turn (Fastest, Safest, Easiest), and each
+later option pays extra for running within ~250 m of the lines already planned, so
+the three options take visibly different lines. Press
 **Change your mind?** on the route page to go back to the task page, add or drop
-tasks, and confirm: all three routes are redesigned. Terrain events (boulders, sand) fire where the
+tasks, and confirm: all three routes are redesigned, the map flies over to them
+and draws each one in.
+
+**Map area.** About 17 × 22 km: Jezero's crater floor, Séítah, the delta, Belva,
+the western rim and, beyond it, **Lac de Charmes**, where Perseverance has driven
+since late 2025. The new tasks there (Falbreen, Kerrlaguna, Scotiafjellet,
+Arathusa, Arbot, Idubi) sit at Perseverance's real positions on those sols
+(NASA/JPL M20 waypoints). Landing site E puts the habitat there. Terrain events (boulders, sand) fire where the
 chosen route actually enters those zones.
 
 ## Real hazard detection

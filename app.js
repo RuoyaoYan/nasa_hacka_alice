@@ -86,6 +86,9 @@
   state.landing = D.landingSites[0].id;
   state.draftLanding = state.landing;
   const landingOf = (id) => D.landingSites.find((s) => s.id === id);
+  // each landing site has its own letter (A, B, C, ...); the habitat badge shows the chosen site's letter
+  const siteLetter = (id) => String.fromCharCode(65 + Math.max(0, D.landingSites.findIndex((s) => s.id === id)));
+  const habLetter = () => siteLetter(state.landing);
   const habKm = (t) => MarsMap.distanceKm(landingOf(state.draftLanding).pos, t.pos);
 
   function measureLine(r) {
@@ -96,11 +99,19 @@
 
   function planMission(m) {
     const sel = state.selected[m.id];
+    // plan the options in planOrder (fastest first); later ones keep away from the lines already planned
+    const plans = {}, done = [];
+    for (const [id, W] of Object.entries(D.profiles).sort((x, y) => (x[1].planOrder || 0) - (y[1].planOrder || 0))) {
+      const picked = m.objectives.filter((o) => sel.has(o.id));
+      const topId = picked.reduce((b, o) => (!b || o.points > b.points ? o : b), null).id;
+      plans[id] = Planner.plan(D, picked.map((o) => ({ ...o, main: o.id === topId })), W, done);
+      done.push(plans[id].line);
+    }
     m.routes = Object.entries(D.profiles).map(([id, W]) => {
       const picked = m.objectives.filter((o) => sel.has(o.id));
       const topId = picked.reduce((b, o) => (!b || o.points > b.points ? o : b), null).id;
       const targets = picked.map((o) => ({ ...o, main: o.id === topId }));
-      const plan = Planner.plan(D, targets, W);
+      const plan = plans[id];
       const r = { id, label: W.label, note: W.note, color: W.color, plan, targets };
       r.dense = plan.line;
       measureLine(r);
@@ -192,6 +203,7 @@
 
   // SVG overlay groups
   const gCrism = svg("g", { style: "display:none" }, map.svg);
+  const gTerrain = svg("g", { style: "display:none" }, map.svg); // terrain types from the planner model
   const gHaz = svg("g", {}, map.svg);
   let hazImg = Planner.hazardImage(D);
   const hazEl = svg("image", { href: hazImg.url, preserveAspectRatio: "none", opacity: 0.6, style: "image-rendering: pixelated" }, gHaz);
@@ -242,6 +254,15 @@
       state.crism.el.setAttribute("x", a.x); state.crism.el.setAttribute("y", a.y);
       state.crism.el.setAttribute("width", Math.max(1, b.x - a.x)); state.crism.el.setAttribute("height", Math.max(1, b.y - a.y));
     }
+    // terrain types (planner model), under the hazards
+    gTerrain.style.display = state.showTerrain ? "" : "none";
+    if (state.showTerrain && state.terrainImg) {
+      const [[s, w], [n, e]] = state.terrainImg.bounds;
+      const a = map.toScreen(n, w), b = map.toScreen(s, e);
+      const el = state.terrainImg.el;
+      el.setAttribute("x", a.x); el.setAttribute("y", a.y);
+      el.setAttribute("width", Math.max(1, b.x - a.x)); el.setAttribute("height", Math.max(1, b.y - a.y));
+    }
     // hazard map from the planner's cost grid
     gHaz.style.display = state.showHazards ? "" : "none";
     if (state.showHazards) {
@@ -268,18 +289,24 @@
     const m = mission();
     const inEva = !!state.run;
     if (state.showRoutes || inEva) {
+      // while new routes are being revealed, each line grows from the habitat (see revealRoutes)
+      const part = (r, i) => { const p = inEva ? 1 : routeProgress(i); return p >= 1 ? r.dense : p <= 0 ? null : slice(r, 0, p * r.km); };
       if (!inEva) {
         m.routes.forEach((r, i) => {
           if (i === state.routeIdx) return;
-          svg("path", { d: pathD(r.dense), fill: "none", stroke: "#1D1C1A", "stroke-width": 7, opacity: 0.35, "stroke-linejoin": "round" }, gRoutes);
-          svg("path", { d: pathD(r.dense), fill: "none", stroke: r.color, "stroke-width": 4, "stroke-dasharray": "10 6", "stroke-linejoin": "round", opacity: 0.95 }, gRoutes);
+          const line = part(r, i); if (!line) return;
+          svg("path", { d: pathD(line), fill: "none", stroke: "#1D1C1A", "stroke-width": 7, opacity: 0.35, "stroke-linejoin": "round" }, gRoutes);
+          svg("path", { d: pathD(line), fill: "none", stroke: r.color, "stroke-width": 4, "stroke-dasharray": "10 6", "stroke-linejoin": "round", opacity: 0.95 }, gRoutes);
         });
       }
       const r = route();
-      const d = pathD(r.dense);
+      const line = part(r, state.routeIdx);
+      if (!line) { /* not revealed yet */ } else {
+      const d = pathD(line);
       svg("path", { d, fill: "none", stroke: "#FFFFFF", "stroke-width": 10, "stroke-linejoin": "round", "stroke-linecap": "round", opacity: inEva ? 0.6 : 1 }, gRoutes);
       svg("path", { d, fill: "none", stroke: r.color, "stroke-width": 6, "stroke-linejoin": "round", "stroke-linecap": "round", opacity: inEva ? 0.45 : 1 }, gRoutes);
-      drawArrows(r, gRoutes);
+      if (line === r.dense) drawArrows(r, gRoutes);
+      }
     }
     // part of the route selected on the elevation chart
     if (state.sel && !state.run) {
@@ -370,7 +397,7 @@
         list.push({ pos: h.pos, el });
       }
     }
-    list.push({ pos: D.habitat.pos, el: pinEl("", "A", "Habitat", D.habitat.name) });
+    list.push({ pos: D.habitat.pos, el: pinEl("", habLetter(), "Habitat", D.habitat.name) });
     state.playerMarker = null;
     if (state.run) {
       const el = html("div", { class: "mm-marker" });
@@ -380,6 +407,39 @@
     }
     for (const p of state.drawPts) { const el = html("div", { class: "mm-marker" }); el.append(html("div", { class: "draw-pt" })); list.push({ pos: p, el }); }
     setMarkers(list);
+  }
+
+  // ---------- Route reveal: fly over to the new routes, then draw them one after another ----------
+  const REVEAL = { stagger: 350, dur: 1100 };
+  function revealOrder() { // the other options first, the selected one last (on top)
+    const n = mission().routes.length, idx = [...Array(n).keys()].filter((i) => i !== state.routeIdx);
+    return [...idx, state.routeIdx];
+  }
+  function routeProgress(i) {
+    const a = state.routeAnim; if (!a) return 1;
+    if (a.t0 == null) return 0; // still flying
+    const k = revealOrder().indexOf(i);
+    const t = (performance.now() - a.t0 - k * REVEAL.stagger) / REVEAL.dur;
+    return t <= 0 ? 0 : t >= 1 ? 1 : 1 - Math.pow(1 - t, 2);
+  }
+  function revealRoutes(flyMs = 1400) {
+    const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) { state.routeAnim = null; fitRoute(true, 0); drawOverlays(); return; }
+    const anim = state.routeAnim = { t0: null };
+    drawOverlays();
+    const m = mission(), pts = [D.habitat.pos, ...m.routes.flatMap((r) => r.dense)];
+    const v = map.fitBounds(pts, 90, 16.5);
+    map.flyTo(v.lat, v.lon, v.zoom, flyMs, { arc: true, done: () => {
+      if (state.routeAnim !== anim) return;
+      anim.t0 = performance.now();
+      const total = REVEAL.dur + REVEAL.stagger * (m.routes.length - 1);
+      const tick = () => {
+        if (state.routeAnim !== anim) return;
+        drawOverlays();
+        if (performance.now() - anim.t0 < total) requestAnimationFrame(tick); else { state.routeAnim = null; drawOverlays(); }
+      };
+      requestAnimationFrame(tick);
+    } });
   }
 
   function fitRoute(all = true, ms = 700) {
@@ -456,6 +516,18 @@
         $("#crism-note").textContent = "(not built yet: run tools/crism/make_crism_overlay.py)";
       });
   }
+  $("#ov-terrain").addEventListener("change", (e) => {
+    state.showTerrain = e.target.checked;
+    if (state.showTerrain && !state.terrainImg) {
+      const t = Planner.terrainImage(D);
+      state.terrainImg = { ...t, el: svg("image", { href: t.url, preserveAspectRatio: "none", style: "image-rendering: pixelated" }, gTerrain) };
+      const ul = $("#terrain-legend"); ul.innerHTML = "";
+      for (const [, [name, col]] of Object.entries(TERRAIN_NAMES)) { const li = html("li"); const sw = html("i"); sw.style.background = col; li.append(sw, document.createTextNode(name)); ul.append(li); }
+    }
+    $("#terrain-legend").hidden = !state.showTerrain;
+    if (state.showTerrain) { const [[s, w], [n, ee]] = state.terrainImg.bounds; const v = map.fitBounds([[s, w], [n, ee]], 30, 14); map.flyTo(v.lat, v.lon, v.zoom, 800); }
+    drawOverlays();
+  });
   $("#ov-crism").addEventListener("change", (e) => {
     state.showCrism = e.target.checked;
     $("#crism-legend").hidden = !e.target.checked;
@@ -629,9 +701,9 @@
       svg("rect", { x: -10, y: -10, width: 20, height: 20, fill }, g);
       const n = svg("text", { x: 0, y: 4, "text-anchor": "middle", "font-size": 11, "font-family": "Poppins, sans-serif", "font-weight": 600, fill: "#FFFFFF" }, g); n.textContent = label;
     };
-    mark(0, "A", "#1D1C1A");
+    mark(0, habLetter(), "#1D1C1A");
     for (const st of r.allStops) mark(st.at * r.km, String(st.order), st.main ? "#C2410C" : r.color);
-    mark(r.km, "A", "#1D1C1A");
+    mark(r.km, habLetter(), "#1D1C1A");
     // selection layer
     const selRect = svg("rect", { x: 0, y: t, width: 0, height: H - t - b, fill: "#1D1C1A", opacity: 0.12, visibility: "hidden" }, s);
     const toKm = (ev) => { const rc = s.getBoundingClientRect(); const x = ((ev.clientX - rc.left) / rc.width) * W; return clamp(((x - l) / (W - l - rr)) * r.km, 0, r.km); };
@@ -696,7 +768,9 @@
     renderClimbs(route());
   }));
 
-  const TERRAIN_NAMES = { floor: ["Crater floor", "#C9CED6"], delta: ["Delta deposits", "#74A9A0"], rim: ["Crater rim slopes", "#A6ACB6"], sand: ["Sand ripple fields", "#E2C36E"] };
+  const TERRAIN_LABELS = { floor: "Crater floor", delta: "Delta deposits", margin: "Margin unit (olivine, carbonate)", channel: "River channel (Neretva Vallis)", crater: "Impact crater (Belva)",
+    rim: "Crater rim slopes", ridges: "Valleys and ridges (Lac de Charmes)", megabreccia: "Megabreccia blocks", sand: "Sand ripple fields" };
+  const TERRAIN_NAMES = Object.fromEntries(Object.entries(TERRAIN_LABELS).map(([k, v]) => { const c = Planner.TERRAIN_COLORS[k]; return [k, [v, `rgb(${c[0]}, ${c[1]}, ${c[2]})`]]; }));
   const SURF_NAMES = { bedrock: ["Bedrock", "#8D96A3"], gravel: ["Gravel slope", "#C5BFB4"], sand: ["Loose sand", "#E6D3A8"], rough: ["Rough ground", "#A99474"], boulders: ["Boulders", "#8A7F76"], unknown: ["Unknown", "#111111"] };
   function renderSurfaces(r) {
     const tKm = {}, sKm = {};
@@ -828,11 +902,11 @@
   function renderWaypoints(r, m) {
     const ol = $("#waypoints"); ol.innerHTML = "";
     ol.style.setProperty("--route-color", r.color);
-    const items = [{ badge: "A", cls: "", name: "Habitat", km: 0, pos: D.habitat.pos, sub: `${D.habitat.name}. Board the rover and head out` }];
+    const items = [{ badge: habLetter(), cls: "", name: "Habitat", km: 0, pos: D.habitat.pos, sub: `${D.habitat.name}. Board the rover and head out` }];
     for (const s of r.allStops) {
       items.push({ badge: String(s.order), cls: s.main ? "target" : "stop", name: s.name, km: s.at * r.km, pos: s.pos, sub: `${TYPE[s.type].label} · ${s.minutes} min on site · ${priority(s)} priority. ${s.detail}`, photo: s.id });
     }
-    items.push({ badge: "A", cls: "", name: "Back at the habitat", km: r.km, pos: D.habitat.pos, sub: "Tour complete" });
+    items.push({ badge: habLetter(), cls: "", name: "Back at the habitat", km: r.km, pos: D.habitat.pos, sub: "Tour complete" });
     for (const it of items) {
       const li = html("li", { class: "wp" });
       li.append(html("span", { class: `wp-badge ${it.cls}`, "aria-hidden": "true" }, it.badge));
@@ -866,6 +940,7 @@
 
   // ---------- EVA ----------
   function startEva() {
+    state.routeAnim = null;
     const m = mission(), r = route();
     state.run = {
       m, r, km: 0, dir: 1, maxKm: 0,
@@ -1209,7 +1284,7 @@
     const [hx, hy] = P(D.habitat.pos);
     const hab = svg("g", { transform: `translate(${hx.toFixed(1)} ${hy.toFixed(1)})` }, S);
     svg("rect", { x: -10, y: -10, width: 20, height: 20, fill: "#C2410C", stroke: "#FFFFFF", "stroke-width": 2 }, hab);
-    const ht = svg("text", { "text-anchor": "middle", y: 4.5, "font-size": 12, "font-weight": 700, "font-family": "Poppins, sans-serif", fill: "#FFFFFF" }, hab); ht.textContent = "A";
+    const ht = svg("text", { "text-anchor": "middle", y: 4.5, "font-size": 12, "font-weight": 700, "font-family": "Poppins, sans-serif", fill: "#FFFFFF" }, hab); ht.textContent = habLetter();
     const rover = svg("circle", { r: 6, fill: "#FFD84D", stroke: "#1D1C1A", "stroke-width": 2, cx: hx, cy: hy }, S);
 
     const hero = $("#end-hero"), stamp = $("#end-stamp"), burst = $("#end-burst");
@@ -1380,7 +1455,7 @@
     for (const s of [...sites].sort((x, y) => (picked.length ? x.km - y.km : 0))) {
       const b = html("button", { class: "land", type: "button", role: "radio", "aria-checked": String(s.id === state.draftLanding) });
       const top = html("span", { class: "land-top" });
-      top.append(html("span", { class: "land-dot", "aria-hidden": "true" }, "A"), html("span", { class: "title-4" }, s.name));
+      top.append(html("span", { class: "land-dot", "aria-hidden": "true" }, siteLetter(s.id)), html("span", { class: "title-4" }, s.name));
       if (best && s.id === best.id) top.append(html("span", { class: "badge" }, "Best"));
       b.append(top, html("span", { class: "caption-4 land-km" }, picked.length ? `Tour about ${s.km.toFixed(1)} km${best && s.id !== best.id ? ` · +${(s.km - best.km).toFixed(1)} km vs best` : ""}` : s.note));
       b.addEventListener("click", () => { $("#land-auto").checked = false; state.draftLanding = s.id; updateTaskSummary(); });
@@ -1475,7 +1550,9 @@
       planMission(TODAY);
       state.routeIdx = 0; state.planned = true;
       setScreen("plan");
-      renderPlan(); buildMarkers(); drawOverlays(); fitRoute();
+      state.routeAnim = { t0: null }; // hide the new lines until the map has flown over
+      renderPlan(); buildMarkers(); drawOverlays();
+      setTimeout(() => revealRoutes(), 300); // once the task page has faded out
       $(".plan-only.side-scroll").scrollTop = 0;
       toast(`Route planned for ${state.draft.size} task${state.draft.size > 1 ? "s" : ""}.`);
       $("#btn-start").focus({ preventScroll: true });
@@ -1855,7 +1932,7 @@
     if (!Scan) return;
     setScanStatus("Scanning NASA HiRISE imagery for hazards…");
     const layers = [L[HIRISE], L[CTX]].map((l) => ({ name: l.name, template: l.template }));
-    Scan.scan(D.planArea, layers, 12, (s) => setScanStatus(`Hazard scan: ${s}…`))
+    Scan.scan(D.scanArea || D.planArea, layers, 12, (s) => setScanStatus(`Hazard scan: ${s}…`))
       .then((res) => {
         const m = Planner.mergeMask(D, res);
         state.scan = res;

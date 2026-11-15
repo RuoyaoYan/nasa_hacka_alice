@@ -40,6 +40,14 @@
     lookout:    [18.4575, 77.2685], // Lookout Hill on the rim crest, sol 1354
     rimSouth:   [18.4796, 77.2993], // Dox Castle at the foot of the rim, sols 1250 to 1288
     rimSkyline: [18.4285, 77.3555], // estimate: open floor with the whole rim in view
+    // beyond the western rim: "Lac de Charmes", where Perseverance drove from late 2025 (NASA/JPL M20 waypoints)
+    falbreen:   [18.4526, 77.2546], // Falbreen, sol 1518: maybe older than Jezero crater itself
+    kerrlaguna: [18.4508, 77.2556], // Kerrlaguna megaripples, sol 1593
+    scotia:     [18.4476, 77.2643], // Scotiafjellet megabreccia workspace, sol 1608
+    arathusa:   [18.4277, 77.2267], // Arathusa outcrop and the rover selfie, sols 1792 to 1797
+    arbot:      [18.4305, 77.2212], // Arbot ridgeline mosaic, sol 1883
+    idubi:      [18.4356, 77.2331], // on the way to Idubi, sols 2006 to 2022
+    lacPlain:   [18.4296, 77.2392], // first stop beyond the rim, sol 1707
     // other landing sites
     forksPlain: [18.4500, 77.4140],
     fanCamp:    [18.4875, 77.3925],
@@ -53,16 +61,30 @@
     site: "Jezero crater",
     conditions: { dust: "Low", tempC: -38, radiation: "Normal" },
     places: P,
-    habitat: { pos: P.habitat, name: "Habitat" },
+    habitat: { pos: P.habitat, name: "Octavia E. Butler Landing" }, // replaced by the chosen landing site
     // Where the crew landed: the habitat, start and end of every tour
     landingSites: [
       { id: "butler", pos: P.habitat, name: "Octavia E. Butler Landing", note: "Perseverance's real landing site. Flat crater floor, close to Séítah and the delta front." },
       { id: "forks", pos: P.forksPlain, name: "Three Forks plain", note: "Beside the sample depot at the foot of the delta. Short drives to Hawksbill Gap." },
       { id: "fan", pos: P.fanCamp, name: "Upper fan camp", note: "On top of the delta. Belva crater and the rim are close, the crater floor is far." },
-      { id: "south", pos: P.floorSouth, name: "Southern crater floor", note: "Open plains south of Séítah. Long, flat drives to everything." }
+      { id: "south", pos: P.floorSouth, name: "Southern crater floor", note: "Open plains south of Séítah. Long, flat drives to everything." },
+      { id: "charmes", pos: P.lacPlain, name: "Lac de Charmes plain", note: "Beyond the western rim, where Perseverance drove in 2026. Ancient crust close by, the crater floor is a long way back." }
     ],
-    // ~14 x 17 km of Jezero: crater floor, Séítah, the delta, Belva and the western rim
-    planArea: [[18.350, 77.240], [18.575, 77.545]],
+    // ~17 x 22 km: Jezero's crater floor, Séítah, the delta, Belva, the western rim and,
+    // beyond it, the plains of Lac de Charmes
+    planArea: [[18.330, 77.160], [18.600, 77.545]],
+    // the HiRISE hazard scan covers the crater (keeps loading fast); the rest uses the terrain model
+    scanArea: [[18.350, 77.240], [18.575, 77.545]],
+
+    // Terrain types that are not in the elevation model (approximate outlines, for gameplay).
+    // rx, ry are radii in km. Craters, rim slopes, the delta and Lac de Charmes come from the model.
+    terrainZones: [
+      { type: "margin", pos: [18.5060, 77.3250], rx: 1.0, ry: 2.4 },       // Margin unit: olivine and carbonate along the inner rim, sampled 2023 to 2024
+      { type: "channel", pos: [18.4930, 77.3080], rx: 2.0, ry: 0.32 },     // Neretva Vallis river channel floor
+      { type: "megabreccia", pos: [18.4476, 77.2650], rx: 0.30, ry: 0.25 }, // Scotiafjellet blocks
+      { type: "megabreccia", pos: [18.4318, 77.2185], rx: 0.45, ry: 0.35 }, // Arbot ridgeline blocks
+      { type: "megabreccia", pos: [18.4220, 77.2290], rx: 0.40, ry: 0.30 }  // field of light toned blocks south of Arathusa (estimate)
+    ],
 
     landmarks: [
       { pos: P.landing, name: "Octavia E. Butler Landing", note: "Perseverance landing site, 2021" }
@@ -88,9 +110,14 @@
 
     // Risk profiles used to plan the three route options
     profiles: {
-      safest:  { label: "Safest", note: "Avoids slopes over 12° and every boulder field", color: "#2E9E52", maxSlope: 12, steep: 6, sand: 4, rock: Infinity, bonus: false },
-      fastest: { label: "Fastest", note: "Shortest distance, accepts sand, rocks and steeper ground", color: "#2F6FD6", maxSlope: 25, steep: 0.4, sand: 0.3, rock: 0.6, bonus: false },
-      easiest: { label: "Easiest", note: "Least climbing and soft sand, even if a little longer", color: "#8A4FE0", maxSlope: 9, steep: 14, sand: 9, rock: Infinity, bonus: false }
+      // terrain: extra cost per km on each terrain type. avoid: how hard it keeps away from the
+      // options planned before it (planOrder), so the three options take visibly different lines.
+      safest:  { label: "Safest", note: "Avoids slopes over 12°, every boulder field and megabreccia", color: "#2E9E52", maxSlope: 12, steep: 6, sand: 4, rock: Infinity, bonus: false,
+                 terrain: { channel: 0.6, ridges: 1.2, rim: 1.0, margin: 0.4, crater: 3 }, avoid: 1.2, planOrder: 2 },
+      fastest: { label: "Fastest", note: "Shortest distance, accepts sand, rocks and steeper ground", color: "#2F6FD6", maxSlope: 25, steep: 0.2, sand: 0.15, rock: 0.4, bonus: false,
+                 terrain: { megabreccia: 0.8 }, avoid: 0, planOrder: 1 },
+      easiest: { label: "Easiest", note: "Flattest ground: keeps to the crater floor and channels, avoids sand, ridges and rough rock", color: "#8A4FE0", maxSlope: 8, steep: 18, sand: 12, rock: Infinity, bonus: false,
+                 terrain: { floor: -0.2, channel: -0.2, delta: 0.8, margin: 1.5, ridges: 3, rim: 3, crater: 5, megabreccia: 8 }, avoid: 2.2, planOrder: 3 }
     },
 
     // Every task the crew can pick today. "points" is an internal priority weight
@@ -113,12 +140,18 @@
       { id: "nv", pos: P.neretva, type: photo, name: "Neretva Vallis inlet", points: 120, minutes: 25, detail: "The river channel that once filled the lake." },
       { id: "lh", storm: "Steep rim climb, too exposed in storm winds", pos: P.lookout, type: sample, name: "Rim rock at Lookout Hill", points: 600, minutes: 60, detail: "Ancient crust lifted by the impact, with views out over Nili Planum." },
       { id: "rs", storm: "Steep rim climb, too exposed in storm winds", pos: P.rimSlope, type: measure, name: "Radiation on the rim slope", points: 80, minutes: 30, detail: "Halfway up the 780 m climb to the rim. Compare the dose on open slopes with the crater floor." },
+      { id: "fb", pos: P.falbreen, type: photo, name: "Falbreen ancient terrain", points: 120, minutes: 25, detail: "Perseverance stopped here in May 2025 (sol 1516). It may be some of the oldest terrain the rover has explored, perhaps older than Jezero crater itself." },
+      { id: "kl", pos: P.kerrlaguna, type: measure, name: "Kerrlaguna megaripples", points: 80, minutes: 30, detail: "Inactive megaripples shaped by ancient winds, studied in August 2025. Measure the crests and check whether any sand still moves." },
+      { id: "sc", pos: P.scotia, type: sample, name: "Scotiafjellet megabreccia", points: 400, minutes: 50, detail: "A chaotic mix of rock broken by ancient impacts. It could hold pieces of deep crust, some of the oldest rock within reach." },
+      { id: "ar", pos: P.arathusa, type: sample, name: "Arathusa igneous outcrop", points: 500, minutes: 45, detail: "Perseverance abraded this outcrop and took a selfie here in March 2026. Its large crystals formed underground, likely before Jezero crater existed." },
+      { id: "id", pos: P.idubi, type: measure, name: "Idubi hot spring search", points: 150, minutes: 35, detail: "Where Perseverance broke Opportunity's driving record in October 2026, on its way to Idubi to look for traces of ancient hydrothermal systems." },
       { id: "sr", storm: "Steep rim climb, too exposed in storm winds", pos: P.rimSouth, type: sample, name: "Dox Castle outcrop", points: 100, minutes: 35, detail: "Rim rock at the start of the climb that may record ancient hot springs." },
       // Sightseeing: drive to a viewpoint, take photos, and leave them for the next crew
       { id: "vb", storm: "Dust hides the view today", pos: P.belvaRim, type: sightsee, group: "sight", name: "Belva crater panorama", points: 90, minutes: 25, detail: "Stand on Echo Creek, where Perseverance took its 152 image mosaic, and look across the 900 m crater." },
       { id: "vk", storm: "Dust hides the view today", pos: P.vanZyl, type: sightsee, group: "sight", name: "Kodiak from Van Zyl Overlook", points: 60, minutes: 20, detail: "Perseverance shot Kodiak from this rise at 8:15 in the morning, when low sun picks out the layers. Repeat the shot." },
       { id: "vs", storm: "Dust hides the view today", pos: P.seitahSouth, type: sightsee, group: "sight", name: "South Séítah ridges", points: 70, minutes: 20, detail: "Rocky ridges rising out of the dunes, some of the oldest rock in the crater." },
       { id: "vn", storm: "Dust hides the view today", pos: P.neretvaView, type: sightsee, group: "sight", name: "Neretva Vallis overlook", points: 110, minutes: 30, detail: "Look down the dry river channel that once filled Jezero's lake." },
+      { id: "ab", storm: "Dust hides the view today", pos: P.arbot, type: sightsee, group: "sight", name: "Arbot ridgeline", points: 100, minutes: 25, detail: "Perseverance shot a mosaic of this ridgeline in April 2026 (sol 1882). Blocks as big as buildings, possible megabreccia, sit on the slopes." },
       { id: "vr", storm: "Dust hides the view today", pos: P.rimSkyline, type: sightsee, group: "sight", name: "Jezero rim skyline", points: 50, minutes: 15, detail: "The whole western rim in one frame, 300 m high and 20 km long." }
     ],
 

@@ -275,6 +275,11 @@ body:not([data-screen="eva"]):not([data-screen="event"]):not([data-screen="end"]
 .modal { width: 100%; max-width: 560px; max-height: calc(100vh - 48px); overflow: auto; background: var(--surface); border: 1px solid var(--line-strong); padding: var(--s-400); transition: transform var(--t-move) var(--ease); box-shadow: 0 16px 48px rgba(0,0,0,0.25); }
 .modal > * + * { margin-top: var(--s-100); }
 .row-between { display: flex; justify-content: space-between; align-items: center; gap: var(--s-200); }
+/* Entry page: a standalone page, nothing of the planner shows behind it */
+.overlay.intro-page { z-index: 100; background: var(--bg); flex-direction: column; }
+.intro-page .intro-brand { position: absolute; top: var(--s-300); left: var(--s-300); display: flex; align-items: center; gap: var(--s-75); }
+.intro-page .intro-brand .logo { border-radius: var(--radius); }
+.intro-page .modal.intro { box-shadow: none; max-width: 640px; border-color: var(--line); }
 .intro-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s-75); margin: var(--s-200) 0 var(--s-300) !important; }
 .intro-steps li { display: flex; align-items: center; gap: var(--s-75); padding: var(--s-75) var(--s-100); background: var(--bg); border: 1px solid var(--line); color: var(--text-2); }
 .intro-steps i { color: var(--accent); font-size: 18px; }
@@ -535,6 +540,9 @@ body:not([data-screen="eva"]):not([data-screen="event"]):not([data-screen="end"]
 .legend { display: flex; flex-direction: column; gap: var(--s-50); margin: 0 0 var(--s-50) 22px; }
 .legend[hidden] { display: none; }
 .legend img { width: 100%; display: block; border: 1px solid var(--line); background: #000; }
+.terrain-legend { list-style: none; display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-25) var(--s-100); color: var(--text-2); }
+.terrain-legend li { display: flex; align-items: center; gap: var(--s-50); }
+.terrain-legend i { width: 10px; height: 10px; flex: none; border: 1px solid rgba(0,0,0,0.2); }
 .ramp { display: block; height: 10px; border: 1px solid var(--line); }
 .ramp-themis { background: linear-gradient(90deg, #121212, #6e6e6e, #f2f2f2); }
 .legend-ends { display: flex; justify-content: space-between; gap: var(--s-75); color: var(--text-2); }
