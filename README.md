@@ -9,14 +9,15 @@ and rough terrain force you to adapt on the way.
 
 ## 🎬 Demo video
 
-[![Momoot demo: pick today's tasks, get three routes over NASA imagery, then change your mind and replan](docs/demo/momoot_demo.gif)](docs/demo/momoot_demo.mp4)
+[![Momoot demo: pick today's tasks, plan three routes over NASA imagery, replan, then drive the EVA](docs/demo/momoot_demo.gif)](https://ruoyaoyan.github.io/nasa_hacka_alice/docs/demo/momoot_demo.mp4)
 
-A 30 second walkthrough: pick today's tasks and a landing site, watch the
+A 30 second walkthrough of a full sol: pick today's tasks and a landing site, watch the
 hazard scan sweep the HiRISE imagery, compare the Safest, Fastest and Easiest routes
-with their route details, then press **Change your mind?**, add tasks, and see all
-three routes redesigned.
+with their route details, press **Change your mind?** to add tasks and redesign all
+three routes, then start the EVA, react to a soft sand event on the way, and finish
+with all tasks done. (The preview above plays at double speed.)
 
-▶ **[Watch the full quality MP4](https://ruoyaoyan.github.io/nasa_hacka_alice/docs/demo/momoot_demo.mp4)** (1080p, 29 s, no sound)
+▶ **[Watch the full video](https://ruoyaoyan.github.io/nasa_hacka_alice/docs/demo/momoot_demo.mp4)** (30 s, no sound)
 
 ## ▶ Play now
 
