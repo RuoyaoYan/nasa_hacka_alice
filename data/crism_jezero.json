@@ -1,0 +1,17 @@
+{
+ "bounds": [
+  [
+   18.280037,
+   77.265661
+  ],
+  [
+   18.736151,
+   77.638569
+  ]
+ ],
+ "width": 614,
+ "height": 751,
+ "mappedPixels": 353863,
+ "source": "CRISM mineral map of Jezero (MRO CRISM HRL000040FF, FRT000047A3, FRT0005C5E, FRS00031442), Parente et al. 2021, Zenodo DOI 10.5281/zenodo.5575824, CC BY 4.0",
+ "legend": "Colours are the dataset's spectral classes, keyed in crism_legend.png (jezeroEM.png). Brighter tones mean a closer match to the class spectrum."
+}
