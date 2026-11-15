@@ -97,6 +97,7 @@
     // (shown as High, Medium or Low priority); the highest picked task becomes the main task.
     // Every task the crew can pick today. "today: true" marks the five everyday
     // choices shown first; the others sit farther out.
+    // "storm" closes a task (greyed out, cannot be picked) during a dust storm (Settings → Demo weather).
     tasks: [
       { id: "hg", pos: P.hawksbill, type: sample, name: "Clay sample at Hawksbill Gap", points: 300, minutes: 45, today: true, detail: "CRISM shows clay minerals in these delta layers. Clay forms in water, so it tells us how long the lake lasted." },
       { id: "tf", pos: P.threeForks, type: photo, name: "Three Forks sample depot", points: 60, minutes: 20, today: true, detail: "Photograph the ten tubes Perseverance cached in 2022 and 2023 and check none are buried by dust." },
@@ -110,15 +111,15 @@
       { id: "ih", pos: P.isoHill, type: photo, name: "Isolated hill layers", points: 80, minutes: 20, detail: "Stacked river layers formed by a deep, fast river." },
       { id: "fl", pos: P.fanLobe, type: sample, name: "Northern fan lobe", points: 80, minutes: 30, detail: "Coarse river sediment near the old channel." },
       { id: "nv", pos: P.neretva, type: photo, name: "Neretva Vallis inlet", points: 120, minutes: 25, detail: "The river channel that once filled the lake." },
-      { id: "lh", pos: P.lookout, type: sample, name: "Rim rock at Lookout Hill", points: 600, minutes: 60, detail: "Ancient crust lifted by the impact, with views out over Nili Planum." },
-      { id: "rs", pos: P.rimSlope, type: measure, name: "Radiation on the rim slope", points: 80, minutes: 30, detail: "Halfway up the 780 m climb to the rim. Compare the dose on open slopes with the crater floor." },
-      { id: "sr", pos: P.rimSouth, type: sample, name: "Dox Castle outcrop", points: 100, minutes: 35, detail: "Rim rock at the start of the climb that may record ancient hot springs." },
+      { id: "lh", storm: "Steep rim climb, too exposed in storm winds", pos: P.lookout, type: sample, name: "Rim rock at Lookout Hill", points: 600, minutes: 60, detail: "Ancient crust lifted by the impact, with views out over Nili Planum." },
+      { id: "rs", storm: "Steep rim climb, too exposed in storm winds", pos: P.rimSlope, type: measure, name: "Radiation on the rim slope", points: 80, minutes: 30, detail: "Halfway up the 780 m climb to the rim. Compare the dose on open slopes with the crater floor." },
+      { id: "sr", storm: "Steep rim climb, too exposed in storm winds", pos: P.rimSouth, type: sample, name: "Dox Castle outcrop", points: 100, minutes: 35, detail: "Rim rock at the start of the climb that may record ancient hot springs." },
       // Sightseeing: drive to a viewpoint, take photos, and leave them for the next crew
-      { id: "vb", pos: P.belvaRim, type: sightsee, group: "sight", name: "Belva crater panorama", points: 90, minutes: 25, detail: "Stand on Echo Creek, where Perseverance took its 152 image mosaic, and look across the 900 m crater." },
-      { id: "vk", pos: P.vanZyl, type: sightsee, group: "sight", name: "Kodiak from Van Zyl Overlook", points: 60, minutes: 20, detail: "Perseverance shot Kodiak from this rise at 8:15 in the morning, when low sun picks out the layers. Repeat the shot." },
-      { id: "vs", pos: P.seitahSouth, type: sightsee, group: "sight", name: "South Séítah ridges", points: 70, minutes: 20, detail: "Rocky ridges rising out of the dunes, some of the oldest rock in the crater." },
-      { id: "vn", pos: P.neretvaView, type: sightsee, group: "sight", name: "Neretva Vallis overlook", points: 110, minutes: 30, detail: "Look down the dry river channel that once filled Jezero's lake." },
-      { id: "vr", pos: P.rimSkyline, type: sightsee, group: "sight", name: "Jezero rim skyline", points: 50, minutes: 15, detail: "The whole western rim in one frame, 300 m high and 20 km long." }
+      { id: "vb", storm: "Dust hides the view today", pos: P.belvaRim, type: sightsee, group: "sight", name: "Belva crater panorama", points: 90, minutes: 25, detail: "Stand on Echo Creek, where Perseverance took its 152 image mosaic, and look across the 900 m crater." },
+      { id: "vk", storm: "Dust hides the view today", pos: P.vanZyl, type: sightsee, group: "sight", name: "Kodiak from Van Zyl Overlook", points: 60, minutes: 20, detail: "Perseverance shot Kodiak from this rise at 8:15 in the morning, when low sun picks out the layers. Repeat the shot." },
+      { id: "vs", storm: "Dust hides the view today", pos: P.seitahSouth, type: sightsee, group: "sight", name: "South Séítah ridges", points: 70, minutes: 20, detail: "Rocky ridges rising out of the dunes, some of the oldest rock in the crater." },
+      { id: "vn", storm: "Dust hides the view today", pos: P.neretvaView, type: sightsee, group: "sight", name: "Neretva Vallis overlook", points: 110, minutes: 30, detail: "Look down the dry river channel that once filled Jezero's lake." },
+      { id: "vr", storm: "Dust hides the view today", pos: P.rimSkyline, type: sightsee, group: "sight", name: "Jezero rim skyline", points: 50, minutes: 15, detail: "The whole western rim in one frame, 300 m high and 20 km long." }
     ],
 
     // Real Perseverance photos of the same place (or the nearest one it imaged).

@@ -1285,11 +1285,27 @@
   const MAX_TASKS = 7;
   state.draft = new Set();
   state.planned = false;
+  // Hard weather: during the (demo) dust storm, tasks with a "storm" reason are closed
+  const stormToday = () => dev.demoWeather;
+  const closedReason = (t) => (t.storm && stormToday() ? t.storm : null);
+  // drop closed tasks from the plan; if nothing is left, fall back to the everyday tasks
+  function pruneClosed() {
+    let dropped = 0;
+    for (const m of D.missions) {
+      const sel = state.selected[m.id];
+      for (const id of [...sel]) { const t = D.tasks.find((x) => x.id === id); if (t && closedReason(t)) { sel.delete(id); dropped++; } }
+      if (!sel.size) D.tasks.filter((t) => t.today && !closedReason(t)).slice(0, 3).forEach((t) => sel.add(t.id));
+    }
+    if (state.draft) for (const id of [...state.draft]) { const t = D.tasks.find((x) => x.id === id); if (t && closedReason(t)) state.draft.delete(id); }
+    return dropped;
+  }
   function distClass(km) { return km < 2.5 ? ["dist-near", "Near"] : km < 5 ? ["dist-mid", "Medium"] : ["dist-far", "Far"]; }
   function taskCard(t) {
-    const li = html("li", { class: "task" });
+    const closed = closedReason(t);
+    const li = html("li", { class: closed ? "task closed" : "task" });
     const id = `task-${t.id}`;
-    const cb = html("input", { type: "checkbox", id }); cb.checked = state.draft.has(t.id);
+    const cb = html("input", { type: "checkbox", id }); cb.checked = !closed && state.draft.has(t.id);
+    if (closed) { cb.disabled = true; cb.setAttribute("aria-describedby", `${id}-closed`); }
     cb.addEventListener("change", () => {
       if (cb.checked && state.draft.size >= MAX_TASKS) { cb.checked = false; toast(`One EVA fits at most ${MAX_TASKS} tasks. Untick one first.`); return; }
       if (cb.checked) state.draft.add(t.id); else state.draft.delete(t.id);
@@ -1307,10 +1323,16 @@
     const meta = html("p", { class: "t-meta caption-4" });
     meta.innerHTML = `<span><strong>${priority(t)}</strong> priority</span><span><strong>${t.minutes}</strong> min on site</span><span>Returns <strong>1 ${PRODUCT[t.type][0]}</strong></span><span class="t-dist ${dc}" data-id="${t.id}">${dl} · ${km.toFixed(1)} km</span>`;
     body.append(html("p", { class: "title-3" }, t.name), html("p", { class: "body-6 muted" }, t.detail), meta);
+    if (closed) {
+      const why = html("p", { class: "t-closed caption-4", id: `${id}-closed` });
+      why.innerHTML = `<i class="ph ph-cloud-warning" aria-hidden="true"></i>`; why.append(document.createTextNode(`Not available today: ${closed}`));
+      body.append(why);
+    }
     lab.append(body);
     li.append(cb, lab);
     renderPhoto(fig, t.id, t.name, false);
     box.append(type, chk);
+    if (closed) box.append(html("span", { class: "t-closed-badge caption-5" }, "Closed · dust storm"));
     const p = D.photos[t.id];
     if (p) lab.append(html("small", { class: "t-credit" }, `${p.caption} · ${p.credit || "NASA/JPL-Caltech/ASU/MSSS"}`));
     return li;
@@ -1318,6 +1340,10 @@
   function renderTaskPage() {
     const today = $("#task-today"), far = $("#task-far"), sight = $("#task-sight");
     today.innerHTML = ""; far.innerHTML = ""; sight.innerHTML = "";
+    if (state.draft) for (const id of [...state.draft]) { const t = D.tasks.find((x) => x.id === id); if (t && closedReason(t)) state.draft.delete(id); }
+    const nClosed = D.tasks.filter(closedReason).length, note = $("#tasks-storm");
+    note.hidden = !nClosed;
+    if (nClosed) { note.innerHTML = `<i class="ph ph-cloud-warning" aria-hidden="true"></i>`; note.append(document.createTextNode(`Dust storm today (dust τ ${DEMO_STORM.tau.toFixed(2)}). ${nClosed} tasks are closed: sightseeing and the rim climbs. They show in grey and cannot be picked.`)); }
     for (const t of D.tasks) (t.group === "sight" ? sight : t.today ? today : far).append(taskCard(t));
     const nFar = D.tasks.filter((t) => !t.today && t.group !== "sight").length;
 
@@ -1378,7 +1404,7 @@
       : "Life support use: none yet. The line marks the 30 % reserve.";
     // 3) best fit: what to add next
     const have = new Set(picked.map((t) => t.type));
-    const cands = D.tasks.filter((t) => !state.draft.has(t.id)).map((t) => {
+    const cands = D.tasks.filter((t) => !state.draft.has(t.id) && !closedReason(t)).map((t) => {
       const k2 = tourKm(site.pos, [...picked, t]), dk = k2 - km;
       const fresh = !have.has(t.type);
       const value = PRIO_VALUE[priority(t)] + (fresh ? 1 : 0);
@@ -1488,12 +1514,15 @@
     dev.demoWeather = e.target.checked;
     try { localStorage.setItem(DEV_KEY, dev.demoWeather ? "1" : "0"); } catch { /* applies until reload */ }
     syncDevUi();
+    const dropped = pruneClosed();
     replanAll();
     renderWeather();
+    if (state.screen === "tasks") renderTaskPage();
     if (!state.run) setCond("#cond-dust", ...dustBase());
+    const closedMsg = dev.demoWeather ? ` Sightseeing and rim climbs are closed${dropped ? `; ${dropped} closed task${dropped > 1 ? "s were" : " was"} taken off the plan` : ""}.` : "";
     toast(dev.demoWeather
-      ? `Demo weather on.${state.run ? " It applies from the next EVA." : " The dust storm now hits early on every route."}`
-      : `Demo weather off.${state.run ? " It applies from the next EVA." : " Back to the normal forecast."}`);
+      ? `Demo weather on.${state.run ? " It applies from the next EVA." : " The dust storm now hits early on every route."}${closedMsg}`
+      : `Demo weather off.${state.run ? " It applies from the next EVA." : " Back to the normal forecast and all tasks open."}`);
   });
 
   document.addEventListener("keydown", (e) => {
