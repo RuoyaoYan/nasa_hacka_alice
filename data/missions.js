@@ -70,11 +70,10 @@
       { id: "south", pos: P.floorSouth, name: "Southern crater floor", note: "Open plains south of Séítah. Long, flat drives to everything." },
       { id: "charmes", pos: P.lacPlain, name: "Lac de Charmes plain", note: "Beyond the western rim, where Perseverance drove in 2026. Ancient crust close by, the crater floor is a long way back." }
     ],
-    // ~17 x 22 km: Jezero's crater floor, Séítah, the delta, Belva, the western rim and,
-    // beyond it, the plains of Lac de Charmes
-    planArea: [[18.330, 77.160], [18.600, 77.545]],
-    // the HiRISE hazard scan covers the crater (keeps loading fast); the rest uses the terrain model
-    scanArea: [[18.350, 77.240], [18.575, 77.545]],
+    // ~21 x 29 km: Jezero's crater floor, Séítah, the delta, Belva, the western rim and,
+    // beyond it, the plains of Lac de Charmes. Every landing site sits at least 3 km inside.
+    planArea: [[18.280, 77.100], [18.640, 77.620]],
+    // the hazard scan covers the whole plan area: HiRISE where it exists, CTX for the rest
 
     // Terrain types that are not in the elevation model (approximate outlines, for gameplay).
     // rx, ry are radii in km. Craters, rim slopes, the delta and Lac de Charmes come from the model.

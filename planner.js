@@ -35,17 +35,20 @@
       const lonFront = 77.409 - (lat - 18.445) * 0.27;
       const gapW = 0.0012 + 0.0045 * gauss(lat - T.hawksbill[0], 0.0028); // the gap softens the scarp
       const inDeltaLat = S((lat - 18.441) / 0.0025);
-      const delta = inDeltaLat * (50 * S((lonFront - lon) / gapW) + 200 * clamp((lonFront - lon) / 0.1, 0, 1));
+      // the delta lies inside the crater: it ends at the rim (no step across the plains beyond)
+      const insideRim = S((lon - (77.291 - (lat - 18.47) * 0.3 - 0.026)) / 0.008);
+      const delta = insideRim * inDeltaLat * (50 * S((lonFront - lon) / gapW) + 200 * clamp((lonFront - lon) / 0.1, 0, 1));
       // western rim: crest line runs slightly north east, notched by Neretva Vallis
       const rimLon = 77.291 - (lat - 18.47) * 0.3;
-      const notch = 1 - 0.6 * gauss(lat - T.neretva[0], 0.006);
+      // Neretva Vallis cuts a notch through the rim; it fades out west of the crest (no canyon across the plains)
+      const notch = 1 - 0.6 * gauss(lat - T.neretva[0], 0.006) * S((lon - (rimLon - 0.065)) / 0.012);
       const rim = 560 * notch * S((rimLon - lon) / 0.007);
       // rim crest (Lookout Hill about +785 m) and, beyond it, the plains of "Lac de Charmes":
       // valleys and ridges about +590 to +640 m (Perseverance waypoints, sols 1700 to 2022)
       const crestLon = rimLon - 0.026;
-      const crest = 210 * notch * gauss(lon - crestLon, 0.02);
+      const crest = 100 * notch * gauss(lon - crestLon, 0.02);
       const beyond = S((crestLon - 0.03 - lon) / 0.008);
-      const ridges = beyond * (40 + 26 * Math.sin((lat * 0.8 + lon) * 260) * Math.cos((lat - lon * 0.4) * 180));
+      const ridges = beyond * (40 + 12 * Math.sin((lat * 0.8 + lon) * 260) * Math.cos((lat - lon * 0.4) * 180));
       // Kodiak butte and Belva crater
       const kodiak = 55 * S((0.32 - kmTo([lat, lon], T.kodiak)) / 0.05);
       const db = kmTo([lat, lon], T.belva);
@@ -249,9 +252,10 @@
 
   // Merge a hazard mask (any resolution, lat/lon bounds) into the grid.
   // A planner cell takes a bit when more than `frac` of its pixels carry it.
-  function mergeMask(D, m, frac = 0.12) {
+  // skip: optional [[s, w], [n, e]] area to leave out (already scanned at higher resolution)
+  function mergeMask(D, m, frac = 0.12, skip = null) {
     if (!G) G = buildGrid(D);
-    addField(m, [D.habitat.pos, ...D.missions.flatMap((ms) => ms.objectives.map((ob) => ob.pos))]);
+    addField(m, [D.habitat.pos, ...(D.landingSites || []).map((l) => l.pos), ...D.missions.flatMap((ms) => ms.objectives.map((ob) => ob.pos))]);
     const [[ms, mw], [mn, me]] = m.bounds;
     const tot = new Uint32Array(G.N), hits = {};
     const bitList = [1, 2, 4, 32, 64];
@@ -263,6 +267,7 @@
       for (let x = 0; x < m.width; x++) {
         const lon = mw + ((x + 0.5) / m.width) * (me - mw);
         if (lon < G.w || lon > G.e) continue;
+        if (skip && lat > skip[0][0] && lat < skip[1][0] && lon > skip[0][1] && lon < skip[1][1]) continue;
         const c = Math.floor((lon - G.w) / G.dLon);
         if (r < 0 || c < 0 || r >= G.rows || c >= G.cols) continue;
         const i = r * G.cols + c, v = m.bits[y * m.width + x];
@@ -271,7 +276,7 @@
       }
     }
     // the habitat and every target must stay reachable: clear hazards within ~75 m of them
-    const keep = [D.habitat.pos, ...D.missions.flatMap((ms) => ms.objectives.map((ob) => ob.pos))];
+    const keep = [D.habitat.pos, ...(D.landingSites || []).map((l) => l.pos), ...D.missions.flatMap((ms) => ms.objectives.map((ob) => ob.pos))];
     for (const pt of keep) {
       const c0 = G.cellOf(pt), r0 = (c0 / G.cols) | 0, k0 = c0 % G.cols;
       for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {

@@ -2008,18 +2008,37 @@
       });
   }
 
-  function runScan() {
+  // The hazard scan covers the whole plan area: HiRISE (25 cm, read at ~10 m) where the Jezero mosaic
+  // exists, then CTX (5 m, read at ~10 m) for the strips around it, such as Lac de Charmes to the west.
+  function scanParts() {
+    const [[s, w], [n, e]] = D.planArea, hb = L[HIRISE].bounds;
+    const hi = [[Math.max(s, hb[0][0]), Math.max(w, hb[0][1])], [Math.min(n, hb[1][0]), Math.min(e, hb[1][1])]];
+    const parts = [{ bounds: hi, layer: L[HIRISE] }];
+    const strip = (b) => { if (b[1][0] - b[0][0] > 0.002 && b[1][1] - b[0][1] > 0.002) parts.push({ bounds: b, layer: L[CTX], skip: hi }); };
+    strip([[s, w], [n, hi[0][1]]]);                 // west
+    strip([[s, hi[1][1]], [n, e]]);                 // east
+    strip([[s, hi[0][1]], [hi[0][0], hi[1][1]]]);   // south
+    strip([[hi[1][0], hi[0][1]], [n, hi[1][1]]]);   // north
+    return { parts, hi };
+  }
+  async function runScan() {
     const Scan = window.MomootHazardScan;
     if (!Scan) return;
-    setScanStatus("Scanning NASA HiRISE imagery for hazards…");
-    const layers = [L[HIRISE], L[CTX]].map((l) => ({ name: l.name, template: l.template }));
-    Scan.scan(D.scanArea || D.planArea, layers, 12, (s) => setScanStatus(`Hazard scan: ${s}…`))
-      .then((res) => {
-        const m = Planner.mergeMask(D, res);
-        state.scan = res;
-        replanAll((state.cmMsg ? state.cmMsg + " " : "") + `Hazard scan of ${res.source} imagery found ${res.found.craters || 0} craters, ${res.found.coarse} hills or crater walls and ${res.found.fine} boulders or small craters. ${m.blocked.toLocaleString("en")} cells are now blocked for safe routes, and all routes were re planned.`);
-      })
-      .catch(() => setScanStatus("Hazard scan unavailable: the browser could not read the NASA image pixels. Routes use the terrain model only."));
+    const { parts } = scanParts();
+    const total = { fine: 0, coarse: 0, craters: 0 }, used = new Set();
+    let blocked = 0, done = 0, res = null;
+    for (const [k, part] of parts.entries()) {
+      setScanStatus(`Scanning NASA ${part.layer.name} imagery for hazards (${k + 1} of ${parts.length})…`);
+      try {
+        res = await Scan.scan(part.bounds, [{ name: part.layer.name, template: part.layer.template }], 12, (st) => setScanStatus(`Hazard scan ${k + 1} of ${parts.length}: ${st}…`));
+        blocked += Planner.mergeMask(D, res, 0.12, part.skip || null).blocked;
+        for (const key of Object.keys(total)) total[key] += res.found[key] || 0;
+        used.add(part.layer.name); done++;
+      } catch (err) { /* this part could not be read; the terrain model covers it */ }
+    }
+    if (!done) { setScanStatus("Hazard scan unavailable: the browser could not read the NASA image pixels. Routes use the terrain model only."); return; }
+    state.scan = { ...res, source: [...used].join(" and "), found: total };
+    replanAll((state.cmMsg ? state.cmMsg + " " : "") + `Hazard scan of ${state.scan.source} imagery found ${total.craters} craters, ${total.coarse} hills or crater walls and ${total.fine} boulders or small craters. ${blocked.toLocaleString("en")} cells are now blocked for safe routes, and all routes were re planned.`);
   }
 
   loadCostMatrix().then((msg) => { state.cmMsg = msg; replanAll(msg); }).catch(() => {}).finally(runScan);
