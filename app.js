@@ -435,6 +435,7 @@
   }
   function routeProgress(i) {
     const a = state.routeAnim; if (!a) return 1;
+    if (a.only != null) { if (i !== a.only) return 1; const t = (performance.now() - a.t0) / REVEAL.dur; return t >= 1 ? 1 : 1 - Math.pow(1 - Math.max(0, t), 2); }
     if (a.t0 == null) return 0; // still flying
     const k = revealOrder().indexOf(i);
     const t = (performance.now() - a.t0 - k * REVEAL.stagger) / REVEAL.dur;
@@ -449,12 +450,15 @@
     const anim = state.routeAnim = { t0: null, hideHaz: !!scan, sweep: null };
     const m = mission(), pts = [D.habitat.pos, ...m.routes.flatMap((r) => r.dense)];
     const v = map.fitBounds(pts, 90, 16.5);
-    if (withScan) { map.setView(v.lat, v.lon, map.minZoom); scanCaption("Jezero crater, Mars", "ph-globe-hemisphere-east"); }
     drawOverlays();
-    map.flyTo(v.lat, v.lon, v.zoom, withScan ? 3600 : flyMs, { arc: !withScan, easeInOut: withScan, done: () => {
+    const flyIn = () => map.flyTo(v.lat, v.lon, v.zoom, withScan ? 3200 : flyMs, { arc: !withScan, easeInOut: withScan, done: () => {
       if (state.routeAnim !== anim) return;
       if (scan) sweepScan(anim, drawRoutes); else { if (withScan) scanCaption(null); drawRoutes(); }
     } });
+    if (withScan) { // smoothly out to the whole of Mars first, then down into Jezero
+      scanCaption("Jezero crater, Mars", "ph-globe-hemisphere-east");
+      map.flyTo(v.lat, v.lon, map.minZoom + 0.5, 1600, { easeInOut: true, done: () => { if (state.routeAnim === anim) setTimeout(flyIn, 250); } });
+    } else flyIn();
     function drawRoutes() {
       if (state.routeAnim !== anim) return;
       anim.t0 = performance.now();
@@ -973,8 +977,22 @@
   }
 
   function selectRoute(i) {
+    const changed = i !== state.routeIdx;
     state.routeIdx = i;
-    renderPlan(); buildMarkers(); drawOverlays();
+    renderPlan(); buildMarkers();
+    if (!changed || state.run) { drawOverlays(); return; }
+    const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) { drawOverlays(); return; }
+    // glide to frame the chosen route, then draw it in from the habitat (the others stay in place)
+    const anim = state.routeAnim = { t0: performance.now(), only: i };
+    const v = map.fitBounds([D.habitat.pos, ...route().dense], 90, 16.5);
+    map.flyTo(v.lat, v.lon, v.zoom, 700, { easeInOut: true });
+    const tick = () => {
+      if (state.routeAnim !== anim) return;
+      drawOverlays();
+      if (performance.now() - anim.t0 < REVEAL.dur) requestAnimationFrame(tick); else { state.routeAnim = null; drawOverlays(); }
+    };
+    requestAnimationFrame(tick);
   }
 
   // ---------- Screens ----------
@@ -1545,17 +1563,28 @@
     }).sort((x, y) => (x.over - y.over) || (y.score - x.score));
     const ol = $("#fit-list"), prev = [...ol.children].map((li) => li.dataset.id).join();
     ol.innerHTML = "";
+    // tasks added from this list keep their row, shown as Added, so you can see what you picked (and undo it)
+    const kept = state.fitKept || (state.fitKept = new Map());
+    for (const id of [...kept.keys()]) if (!state.draft.has(id)) kept.delete(id);
+    const rows = state.draft.size >= MAX_TASKS ? [] : cands.slice(0, 5);
+    for (const [id, k] of [...kept.entries()].sort((x, y) => x[1].pos - y[1].pos)) rows.splice(Math.min(k.pos, rows.length), 0, { ...k.row, added: true });
     if (state.draft.size >= MAX_TASKS) ol.append(html("li", { class: "caption-4 muted" }, `The tour is full at ${MAX_TASKS} tasks.`));
-    else cands.slice(0, 5).forEach((c, i) => {
-      const li = html("li", { class: c.over ? "over" : "" }); li.dataset.id = c.t.id;
-      const name = html("span", { class: "title-4" }); name.append(html("span", { class: "rank" }, `${i + 1}`), document.createTextNode(c.t.name));
-      const add = html("button", { class: "btn btn-ghost button-sm fit-add", type: "button", "aria-label": `Add ${c.t.name}` }, "Add");
+    rows.forEach((c, i) => {
+      const li = html("li", { class: c.added ? "added" : c.over ? "over" : "" }); li.dataset.id = c.t.id;
+      const name = html("span", { class: "title-4" }); name.append(html("span", { class: "rank" }, c.added ? "✓" : `${i + 1}`), document.createTextNode(c.t.name));
+      const add = html("button", { class: `btn button-sm fit-add ${c.added ? "btn-primary" : "btn-ghost"}`, type: "button", "aria-pressed": String(!!c.added),
+        "aria-label": c.added ? `Remove ${c.t.name}` : `Add ${c.t.name}` }, c.added ? "✓ Added" : "Add");
       add.addEventListener("click", () => {
-        const cb = document.getElementById(`task-${c.t.id}`);
-        if (cb && !cb.checked) { cb.checked = true; cb.dispatchEvent(new Event("change")); }
-        if (cb && cb.closest("#task-far") && $("#task-far").hidden) $("#btn-more-tasks").click();
+        const cb = document.getElementById(`task-${c.t.id}`); if (!cb) return;
+        if (c.added) { kept.delete(c.t.id); if (cb.checked) { cb.checked = false; cb.dispatchEvent(new Event("change")); } return; }
+        if (cb.checked) return;
+        cb.checked = true; cb.dispatchEvent(new Event("change"));
+        if (!cb.checked) return; // tour full: the card refused it
+        kept.set(c.t.id, { pos: i, row: c });
+        if (cb.closest("#task-far") && $("#task-far").hidden) $("#btn-more-tasks").click();
+        updateTaskSummary();
       });
-      li.append(name, add, html("span", { class: "why caption-4" }, `${TYPE[c.t.type].label} · ${c.why.join(" · ")}`));
+      li.append(name, add, html("span", { class: "why caption-4" }, `${TYPE[c.t.type].label} · ${c.added ? "Added to today's plan" : c.why.join(" · ")}`));
       ol.append(li);
     });
     if ([...ol.children].map((li) => li.dataset.id).join() !== prev) [...ol.children].forEach((li) => li.classList.add("flash"));
@@ -1574,6 +1603,7 @@
   function openTasks() {
     const again = state.planned;
     state.draft = new Set(again ? state.selected[TODAY.id] : []);
+    state.fitKept = new Map();
     state.draftLanding = state.landing;
     $("#land-auto").checked = !state.manualLanding;
     $("#tasks-title").textContent = again ? "Change your mind?" : "What do you want to do today?";

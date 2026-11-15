@@ -210,8 +210,8 @@ danger on the way. `planner.js` solves exactly that:
 3. **Best visiting order.** A depth first search with branch and bound tries
    every order of the targets (5 targets = 120 orders) and keeps the cheapest
    round trip from the habitat.
-4. **Natural lines.** Grid zigzags are straightened where a straight line is just
-   as safe (string pulling), then smoothed with Chaikin corner cutting.
+4. **Natural lines.** The line follows the cost grid cell by cell (no
+   straightening), then is smoothed with Chaikin corner cutting.
 
 The three options use different risk weights and a cost for each terrain type:
 **Safest** forbids slopes over 12°, every boulder field and megabreccia,
@@ -228,9 +228,8 @@ the hills, boulders and small craters it found before the routes appear.
 
 **Detail in the imagery shapes every route.** All three options pay a little more
 the closer they get to anything the HiRISE scan found (fading out over a few
-hundred metres), and the final straightening step only replaces a bend with a
-straight line when the line costs no more in total. On open, even ground the
-route is straight; among boulders and rough patches it weaves between them.
+hundred metres). Lines are not straightened afterwards, so every bend the costs
+ask for stays: the route weaves between boulders and rough patches.
 
 **Map area.** About 17 × 22 km: Jezero's crater floor, Séítah, the delta, Belva,
 the western rim and, beyond it, **Lac de Charmes**, where Perseverance has driven
