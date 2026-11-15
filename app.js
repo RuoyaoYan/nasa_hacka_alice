@@ -482,7 +482,7 @@
       drawOverlays();
       if (anim.sweep < 1) { requestAnimationFrame(tick); return; }
       anim.sweep = null; anim.hideHaz = false; drawOverlays();
-      scanCaption(`Found ${res.found.coarse.toLocaleString("en")} hills or crater walls and ${res.found.fine.toLocaleString("en")} boulders or small craters. Routes keep clear of them.`, "ph-check-circle");
+      scanCaption(`Found ${(res.found.craters || 0).toLocaleString("en")} craters, ${res.found.coarse.toLocaleString("en")} hills or crater walls and ${res.found.fine.toLocaleString("en")} boulders or small craters. Routes keep clear of them.`, "ph-check-circle");
       setTimeout(next, 500);
     };
     requestAnimationFrame(tick);
@@ -1451,6 +1451,9 @@
     cb.addEventListener("change", () => {
       if (cb.checked && state.draft.size >= MAX_TASKS) { cb.checked = false; toast(`One EVA fits at most ${MAX_TASKS} tasks. Untick one first.`); return; }
       if (cb.checked) state.draft.add(t.id); else state.draft.delete(t.id);
+      // picked from the card while it is listed in Best fit: keep its row there, marked Added
+      const fr = cb.checked && (state.fitRows || []).find((f) => f.id === t.id && !f.row.added);
+      if (fr && state.fitKept) state.fitKept.set(t.id, { pos: fr.pos, row: fr.row });
       updateTaskSummary();
     });
     const lab = html("label", { for: id });
@@ -1568,6 +1571,7 @@
     for (const id of [...kept.keys()]) if (!state.draft.has(id)) kept.delete(id);
     const rows = state.draft.size >= MAX_TASKS ? [] : cands.slice(0, 5);
     for (const [id, k] of [...kept.entries()].sort((x, y) => x[1].pos - y[1].pos)) rows.splice(Math.min(k.pos, rows.length), 0, { ...k.row, added: true });
+    state.fitRows = rows.map((c, i) => ({ id: c.t.id, pos: i, row: c }));
     if (state.draft.size >= MAX_TASKS) ol.append(html("li", { class: "caption-4 muted" }, `The tour is full at ${MAX_TASKS} tasks.`));
     rows.forEach((c, i) => {
       const li = html("li", { class: c.added ? "added" : c.over ? "over" : "" }); li.dataset.id = c.t.id;
@@ -1578,11 +1582,8 @@
         const cb = document.getElementById(`task-${c.t.id}`); if (!cb) return;
         if (c.added) { kept.delete(c.t.id); if (cb.checked) { cb.checked = false; cb.dispatchEvent(new Event("change")); } return; }
         if (cb.checked) return;
-        cb.checked = true; cb.dispatchEvent(new Event("change"));
-        if (!cb.checked) return; // tour full: the card refused it
-        kept.set(c.t.id, { pos: i, row: c });
-        if (cb.closest("#task-far") && $("#task-far").hidden) $("#btn-more-tasks").click();
-        updateTaskSummary();
+        cb.checked = true; cb.dispatchEvent(new Event("change")); // the card keeps this row as Added
+        if (cb.checked && cb.closest("#task-far") && $("#task-far").hidden) $("#btn-more-tasks").click();
       });
       li.append(name, add, html("span", { class: "why caption-4" }, `${TYPE[c.t.type].label} · ${c.added ? "Added to today's plan" : c.why.join(" · ")}`));
       ol.append(li);
@@ -2016,7 +2017,7 @@
       .then((res) => {
         const m = Planner.mergeMask(D, res);
         state.scan = res;
-        replanAll((state.cmMsg ? state.cmMsg + " " : "") + `Hazard scan of ${res.source} imagery found ${res.found.coarse} hills or crater walls and ${res.found.fine} boulders or small craters. ${m.blocked.toLocaleString("en")} cells are now blocked for safe routes, and all routes were re planned.`);
+        replanAll((state.cmMsg ? state.cmMsg + " " : "") + `Hazard scan of ${res.source} imagery found ${res.found.craters || 0} craters, ${res.found.coarse} hills or crater walls and ${res.found.fine} boulders or small craters. ${m.blocked.toLocaleString("en")} cells are now blocked for safe routes, and all routes were re planned.`);
       })
       .catch(() => setScanStatus("Hazard scan unavailable: the browser could not read the NASA image pixels. Routes use the terrain model only."));
   }

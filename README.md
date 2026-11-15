@@ -226,6 +226,13 @@ and draws each one in. The first plan of a session starts from the whole of Mars
 flies down into Jezero, and sweeps the hazard scan across the imagery so you see
 the hills, boulders and small craters it found before the routes appear.
 
+**Craters.** The hazard scan looks for relief at three sizes (~10 m, ~30 m and
+~90 m pixels), and has its own crater detector: a round floor darker than the rim
+around it, with a rim that stands out from the ground beyond, 240 to 800 m
+across. That catches craters whose floor is dark sand, which the shadow and
+sunlit pairing ignores. The whole crater, rim included, is blocked for safe
+routes, and smaller rings of relief get their floor filled in.
+
 **Detail in the imagery shapes every route.** All three options pay a little more
 the closer they get to anything the HiRISE scan found (fading out over a few
 hundred metres). Lines are not straightened afterwards, so every bend the costs
