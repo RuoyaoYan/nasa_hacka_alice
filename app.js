@@ -248,9 +248,15 @@
     return wrap;
   }
 
+  // screen path; points closer than 1.5 px to the last one drawn are skipped (invisible, but costly to draw)
   function pathD(pts) {
-    let d = "";
-    pts.forEach((p, i) => { const s = map.toScreen(p[0], p[1]); d += `${i ? "L" : "M"}${s.x.toFixed(1)} ${s.y.toFixed(1)}`; });
+    let d = "", lx = -1e9, ly = -1e9;
+    const n = pts.length;
+    for (let i = 0; i < n; i++) {
+      const s = map.toScreen(pts[i][0], pts[i][1]);
+      if (i && i < n - 1 && Math.abs(s.x - lx) + Math.abs(s.y - ly) < 1.5) continue;
+      d += `${i ? "L" : "M"}${s.x.toFixed(1)} ${s.y.toFixed(1)}`; lx = s.x; ly = s.y;
+    }
     return d;
   }
 

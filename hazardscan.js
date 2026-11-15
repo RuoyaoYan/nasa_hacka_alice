@@ -314,16 +314,8 @@
     return out;
   }
 
-  /** Scan the planning area. layers: [{template}] tried in order. */
-  async function scan(bounds, layers, z = 12, onStatus = () => {}) {
-    let img = null, used = null, lastErr = null;
-    for (const L of layers) {
-      try { onStatus(`Downloading ${L.name} tiles`); img = await mosaic(L.template, bounds, z); used = L; break; }
-      catch (e) { lastErr = e; }
-    }
-    if (!img) throw lastErr || new Error("no imagery");
-    onStatus("Looking for shadows next to sunlit slopes");
-    await new Promise((r) => setTimeout(r, 0));
+  /** Find relief in one mosaic: pure pixel work, runs in a worker (or here if workers are unavailable). */
+  function analyse(img) {
     const fine = detect(img, 7);                 // ~10 m pixels: boulders, small craters
     const small = downsample(img, 3);
     const coarse = detect(small, 7);             // ~30 m pixels: hills, buttes, crater walls
@@ -362,9 +354,46 @@
       if (relief[i] ? n * 3 >= t : n * 2 > t) bits[i] |= RELIEF;
       if (rough[i]) bits[i] |= ROUGH;
     }
-    return { width: img.W, height: img.H, bounds: img.bounds, bits, source: used.name, tiles: img.tiles,
+    return { width: img.W, height: img.H, bounds: img.bounds, bits, tiles: img.tiles,
       found: { fine: fine.found, coarse: coarse.found + broad.found, craters: craters.found } };
   }
 
-  window.MomootHazardScan = { scan, RELIEF, ROUGH, params: P };
+  // The heavy part runs in a background worker so the page stays responsive while scanning
+  const SELF_URL = typeof document !== "undefined" && document.currentScript ? document.currentScript.src : null;
+  let worker = null, jobs = 0;
+  const pending = new Map();
+  function analyseInWorker(img) {
+    if (!worker && SELF_URL && typeof Worker !== "undefined") {
+      try {
+        worker = new Worker(SELF_URL);
+        worker.onmessage = (e) => { const p = pending.get(e.data.id); pending.delete(e.data.id); if (e.data.error) p.reject(new Error(e.data.error)); else p.resolve(e.data.res); };
+        worker.onerror = () => { worker = null; for (const p of pending.values()) p.reject(new Error("worker failed")); pending.clear(); };
+      } catch { worker = null; }
+    }
+    if (!worker) return Promise.resolve().then(() => analyse(img));
+    const id = ++jobs;
+    return new Promise((resolve, reject) => {
+      pending.set(id, { resolve, reject });
+      worker.postMessage({ id, img }, [img.gray.buffer, img.valid.buffer]);
+    });
+  }
+
+  /** Scan the planning area. layers: [{template}] tried in order. */
+  async function scan(bounds, layers, z = 12, onStatus = () => {}) {
+    let img = null, used = null, lastErr = null;
+    for (const L of layers) {
+      try { onStatus(`Downloading ${L.name} tiles`); img = await mosaic(L.template, bounds, z); used = L; break; }
+      catch (e) { lastErr = e; }
+    }
+    if (!img) throw lastErr || new Error("no imagery");
+    onStatus("Looking for shadows next to sunlit slopes");
+    const res = await analyseInWorker(img);
+    return { ...res, source: used.name };
+  }
+
+  if (typeof window !== "undefined") window.MomootHazardScan = { scan, RELIEF, ROUGH, params: P };
+  else self.onmessage = (e) => { // running as the worker
+    try { const res = analyse(e.data.img); self.postMessage({ id: e.data.id, res }, [res.bits.buffer]); }
+    catch (err) { self.postMessage({ id: e.data.id, error: String(err) }); }
+  };
 })();

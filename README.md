@@ -211,7 +211,11 @@ danger on the way. `planner.js` solves exactly that:
    every order of the targets (5 targets = 120 orders) and keeps the cheapest
    round trip from the habitat.
 4. **Natural lines.** The line follows the cost grid cell by cell (no
-   straightening), then is smoothed with Chaikin corner cutting.
+   straightening), then is smoothed with Chaikin corner cutting. Finally each
+   leg gets a small sideways **driving wobble** (up to ~30 m, a few overlapping
+   smooth waves). The wobble is visual only, not derived from data: it is the
+   same every time for the same leg, fades to zero near stops, and shrinks
+   wherever it would touch a forbidden cell or come too close to a detected hazard.
 
 The three options use different risk weights and a cost for each terrain type:
 **Safest** forbids slopes over 12°, every boulder field and megabreccia,
@@ -242,7 +246,8 @@ ask for stays: the route weaves between boulders and rough patches.
 the western rim and, beyond it, **Lac de Charmes**, where Perseverance has driven
 since late 2025. Every landing site sits at least 3 km inside it. The hazard scan
 covers all of it: HiRISE where the Jezero mosaic exists, CTX for the strips around
-it (Lac de Charmes is west of the HiRISE mosaic). The terrain model's rim and Lac de
+it (Lac de Charmes is west of the HiRISE mosaic). The pixel work runs in a Web
+Worker, so the page stays responsive while the scan runs. The terrain model's rim and Lac de
 Charmes heights match Perseverance's measured elevations to about 30 m on average. The new tasks there (Falbreen, Kerrlaguna, Scotiafjellet,
 Arathusa, Arbot, Idubi) sit at Perseverance's real positions on those sols
 (NASA/JPL M20 waypoints). Landing site E puts the habitat there. Terrain events (boulders, sand) fire where the

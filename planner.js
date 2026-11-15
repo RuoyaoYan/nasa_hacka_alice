@@ -391,6 +391,38 @@
     return out;
   }
 
+  // ---------- Driving wobble (visual only) ----------
+  // A real drive is never a clean line, so each leg gets a small, smooth sideways wobble
+  // (up to ~30 m, a few overlapping waves). It is NOT derived from data. It is the same every
+  // time for the same leg (seeded), fades to zero near stops, and shrinks wherever it would
+  // touch a forbidden cell or come closer to a detected hazard than the route allows.
+  const WOBBLE_M = [18, 9, 4], WOBBLE_KM = [0.36, 0.17, 0.08], WOBBLE_TAPER_KM = 0.12;
+  function seeded(str) { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return () => { h = Math.imul(h ^ (h >>> 15), 2246822507); h = Math.imul(h ^ (h >>> 13), 3266489909); return ((h ^= h >>> 16) >>> 0) / 4294967296; }; }
+  function wobble(leg, W, seed) {
+    if (leg.length < 4) return leg;
+    const rnd = seeded(seed), phase = WOBBLE_M.map(() => rnd() * Math.PI * 2), kLon = Math.cos((leg[0][0] * Math.PI) / 180);
+    const cum = [0];
+    for (let i = 1; i < leg.length; i++) cum.push(cum[i - 1] + G.kmTo(leg[i - 1], leg[i]));
+    const L = cum[cum.length - 1];
+    if (L < 2 * WOBBLE_TAPER_KM) return leg;
+    const safe = W.rock === Infinity, minHd = safe ? CLEAR_M + 10 : 0;
+    const ok = (p) => { const c = G.cellOf(p), x = cellCost(G, c, W); return x !== Infinity && (!safe || hazardDist(p[0], p[1]) >= minHd); };
+    const out = leg.map((p, i) => {
+      if (i === 0 || i === leg.length - 1) return p;
+      const sKm = cum[i], taper = Math.min(1, sKm / WOBBLE_TAPER_KM, (L - sKm) / WOBBLE_TAPER_KM);
+      let m = 0; for (let k = 0; k < WOBBLE_M.length; k++) m += WOBBLE_M[k] * Math.sin((sKm / WOBBLE_KM[k]) * Math.PI * 2 + phase[k]);
+      m *= taper * taper * (3 - 2 * taper);
+      // sideways direction from the neighbours
+      const a = leg[i - 1], b = leg[i + 1], dy = (b[0] - a[0]) * KM_PER_DEG, dx = (b[1] - a[1]) * KM_PER_DEG * kLon, n = Math.hypot(dx, dy) || 1;
+      for (const f of [1, 0.5, 0.25]) {
+        const off = (m * f) / 1000, q = [p[0] + ((dx / n) * off) / KM_PER_DEG, p[1] - ((dy / n) * off) / (KM_PER_DEG * kLon)];
+        if (ok(q)) return q;
+      }
+      return p;
+    });
+    return smooth(out, 1);
+  }
+
   // Push points that are too close to a hazard outward along the distance gradient,
   // alternating with gentle smoothing, so the line traces the hazard outline as an arc.
   function hugOutline(leg, target) {
@@ -477,6 +509,7 @@
       const leg = [pts[a], ...path.slice(1, -1).map((i) => G.ll((i / G.cols) | 0, i % G.cols)), pts[b]];
       let sm = smooth(densifyLeg(leg), 3);
       if (runW.rock === Infinity) sm = hugOutline(sm, CLEAR_M + 10);
+      sm = wobble(sm, runW, `${W.label}|${pts[a]}|${pts[b]}`);
       legs.push(sm);
       line = line.concat(k === 0 ? sm : sm.slice(1));
     }
