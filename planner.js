@@ -40,13 +40,23 @@
       const rimLon = 77.291 - (lat - 18.47) * 0.3;
       const notch = 1 - 0.6 * gauss(lat - T.neretva[0], 0.006);
       const rim = 560 * notch * S((rimLon - lon) / 0.007);
+      // rim crest (Lookout Hill about +785 m) and, beyond it, the plains of "Lac de Charmes":
+      // valleys and ridges about +590 to +640 m (Perseverance waypoints, sols 1700 to 2022)
+      const crestLon = rimLon - 0.026;
+      const crest = 210 * notch * gauss(lon - crestLon, 0.02);
+      const beyond = S((crestLon - 0.03 - lon) / 0.008);
+      const ridges = beyond * (40 + 26 * Math.sin((lat * 0.8 + lon) * 260) * Math.cos((lat - lon * 0.4) * 180));
       // Kodiak butte and Belva crater
       const kodiak = 55 * S((0.32 - kmTo([lat, lon], T.kodiak)) / 0.05);
       const db = kmTo([lat, lon], T.belva);
       const belva = -45 * gauss(db, 0.28) + 22 * gauss(db - 0.45, 0.1);
-      return delta + rim + kodiak + belva;
+      return delta + rim + crest + ridges + kodiak + belva;
     };
   }
+
+  // Terrain zones drawn from data (approximate outlines): codes stored per grid cell
+  const ZONES = { margin: 1, channel: 2, megabreccia: 3 };
+  const rimCrestLon = (lat) => 77.291 - (lat - 18.47) * 0.3 - 0.026;
 
   // ---------- Grid ----------
   function buildGrid(D) {
@@ -58,6 +68,7 @@
     const rows = Math.ceil((n - s) / dLat), cols = Math.ceil((e - w) / dLon);
     const N = rows * cols;
     const elev = new Float32Array(N), slope = new Float32Array(N), sand = new Float32Array(N), rock = new Uint8Array(N);
+    const zone = new Uint8Array(N); // terrain zones from D.terrainZones (ZONES codes)
     const hd = new Float32Array(N).fill(Infinity); // metres to the nearest detected hazard
     const ext = new Uint8Array(N); // hazards from real data: 1 slope, 2 crater, 4 rock (terrain_hazard tool), 32 relief, 64 rough (HiRISE scan)
     const elevAt = makeElevation(T);
@@ -73,6 +84,10 @@
       }
       sand[i] = sv;
       for (const b of D.hazards.boulders) if (kmTo(p, b.pos) < b.r) rock[i] = 1;
+      for (const z of D.terrainZones || []) {
+        const dy = (p[0] - z.pos[0]) * KM_PER_DEG / z.ry, dx = (p[1] - z.pos[1]) * KM_PER_DEG * kLon / z.rx;
+        if (Math.hypot(dx, dy) < 1 && ZONES[z.type]) zone[i] = ZONES[z.type];
+      }
     }
     for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
       const i = r * cols + c;
@@ -80,7 +95,7 @@
       const ey = (elev[Math.min(rows - 1, r + 1) * cols + c] - elev[Math.max(0, r - 1) * cols + c]) / (2 * cellKm * 1000);
       slope[i] = (Math.atan(Math.hypot(ex, ey)) * 180) / Math.PI;
     }
-    return { rows, cols, N, s, w, n, e, dLat, dLon, cellKm, elev, slope, sand, rock, ext, hd, ll, elevAt, kmTo,
+    return { rows, cols, N, s, w, n, e, dLat, dLon, cellKm, elev, slope, sand, rock, zone, ext, hd, ll, elevAt, kmTo, belva: T.belva,
       cellOf: (p) => clamp(Math.floor((n - p[0]) / dLat), 0, rows - 1) * cols + clamp(Math.floor((p[1] - w) / dLon), 0, cols - 1) };
   }
 
@@ -98,7 +113,7 @@
     let pen = 0;
     if (G.exempt && G.exempt[i]) return 1 + 4 * clamp((sl - 5) / 10, 0, 1.5) + (x & BLOCK_BITS ? 6 : 0); // a target's own approach
     if (sl > W.maxSlope) { if (!W.relax || sl > 40) return Infinity; pen += RELAX_PEN; }
-    if (safe && G.rock[i]) { if (!W.relax) return Infinity; pen += RELAX_PEN; }
+    if (safe && (G.rock[i] || G.zone[i] === ZONES.megabreccia)) { if (!W.relax) return Infinity; pen += RELAX_PEN; }
     if (safe && (x & BLOCK_BITS)) { if (!W.relax) return Infinity; pen += RELAX_PEN; }
     else if (safe && hd < CLEAR_M) { if (!W.relax) return Infinity; pen += RELAX_PEN * (0.3 + 0.7 * (1 - hd / CLEAR_M)); }
     const steep = clamp((sl - 5) / 10, 0, 1.5);
@@ -112,6 +127,8 @@
       c += 0.8 * t * t;
     }
     if (x & 64) c += 0.4 + (W.rock === Infinity ? 0.6 : 0.2); // rough ground is slower
+    if (W.terrain) c += W.terrain[terrainAt(i)] || 0;   // each profile likes or dislikes each terrain type
+    if (G.avoid && W.avoid && G.avoid[i]) c += W.avoid * G.avoid[i]; // keep away from the other route options
     return c + pen;
   }
 
@@ -184,14 +201,40 @@
     pointHazards = list;
     refreshHd();
   }
+  // Terrain type of a grid cell
+  function terrainAt(c) {
+    const r = (c / G.cols) | 0, k = c % G.cols;
+    const lat = G.n - (r + 0.5) * G.dLat, lon = G.w + (k + 0.5) * G.dLon;
+    const z = G.zone[c];
+    if (G.sand[c] > 0.35) return "sand";
+    if (z === ZONES.megabreccia) return "megabreccia";
+    if (G.kmTo([lat, lon], G.belva) < 0.42) return "crater";
+    if (z === ZONES.channel) return "channel";
+    if (lon < rimCrestLon(lat) - 0.012) return "ridges";
+    if (z === ZONES.margin) return "margin";
+    if (lon < 77.345 && G.elev[c] > 120) return "rim";
+    const lonFront = 77.405 - (lat - 18.445) * 0.27;
+    return lat > 18.441 && lon < lonFront ? "delta" : "floor";
+  }
+  const TERRAIN_COLORS = { floor: [201, 206, 214], delta: [116, 169, 160], margin: [170, 140, 200], channel: [95, 150, 205], crater: [230, 140, 90],
+    rim: [166, 172, 182], ridges: [190, 120, 95], megabreccia: [240, 236, 220], sand: [226, 195, 110] };
+  // Map layer: every terrain type in its own colour, at the grid's 50 m resolution
+  function terrainImage(D) {
+    if (!G) G = buildGrid(D);
+    const cv = document.createElement("canvas"); cv.width = G.cols; cv.height = G.rows;
+    const ctx = cv.getContext("2d"), img = ctx.createImageData(G.cols, G.rows);
+    for (let i = 0; i < G.N; i++) { const col = TERRAIN_COLORS[terrainAt(i)]; img.data.set([col[0], col[1], col[2], 120], i * 4); }
+    ctx.putImageData(img, 0, 0);
+    return { url: cv.toDataURL(), bounds: [[G.s, G.w], [G.n, G.e]] };
+  }
+
   // What the ground is like at a point (for the terrain and surface breakdown)
   function classify(lat, lon) {
     const c = G.cellOf([lat, lon]);
-    const lonFront = 77.405 - (lat - 18.445) * 0.27;
-    const terrain = G.sand[c] > 0.35 ? "sand" : lon < 77.345 && G.elev[c] > 120 ? "rim" : lat > 18.441 && lon < lonFront ? "delta" : "floor";
+    const terrain = terrainAt(c);
     let surface = "bedrock";
     const hd = hazardDist(lat, lon);
-    if (G.rock[c] || hd < 1) surface = "boulders";
+    if (G.rock[c] || hd < 1 || terrain === "megabreccia") surface = "boulders";
     else if (G.sand[c] > 0.35) surface = "sand";
     else if (G.ext[c] & 64) surface = "rough";
     else if (G.slope[c] > 6) surface = "gravel";
@@ -269,6 +312,22 @@
       }
     }
     return { dist, prev };
+  }
+
+  // Cells near the other route options (fading out over ~250 m), so each option takes its own line
+  function avoidField(lines, win) {
+    const f = new Float32Array(G.N), R = 5; // cells (250 m)
+    for (const line of lines) for (let k = 0; k < line.length; k += 2) {
+      const c0 = G.cellOf(line[k]), r0 = (c0 / G.cols) | 0, k0 = c0 % G.cols;
+      for (let dr = -R; dr <= R; dr++) for (let dc = -R; dc <= R; dc++) {
+        const rr = r0 + dr, cc = k0 + dc;
+        if (rr < win.r0 || cc < win.c0 || rr > win.r1 || cc > win.c1) continue;
+        const d = Math.hypot(dr, dc); if (d > R) continue;
+        const i = rr * G.cols + cc, v = 1 - d / (R + 1);
+        if (!G.exempt[i] && v > f[i]) f[i] = v;
+      }
+    }
+    return f;
   }
 
   // ---------- DFS with branch and bound over visiting orders ----------
@@ -391,7 +450,7 @@
 
   // ---------- Public: plan a tour ----------
   let G = null;
-  function plan(D, targets, W) {
+  function plan(D, targets, W, avoidLines) {
     const t0 = performance.now();
     if (!G) G = buildGrid(D);
     const pts = [D.habitat.pos, ...targets.map((t) => t.pos)];
@@ -410,6 +469,7 @@
     const rc = cells.map((c) => [(c / G.cols) | 0, c % G.cols]), m = Math.round(4 / G.cellKm);
     const win = { r0: Math.max(0, Math.min(...rc.map((x) => x[0])) - m), r1: Math.min(G.rows - 1, Math.max(...rc.map((x) => x[0])) + m),
       c0: Math.max(0, Math.min(...rc.map((x) => x[1])) - m), c1: Math.min(G.cols - 1, Math.max(...rc.map((x) => x[1])) + m) };
+    G.avoid = avoidLines && avoidLines.length && W.avoid ? avoidField(avoidLines, win) : null;
     let cost = costArray(G, W, win);
     let runs = cells.map((c) => dijkstra(G, c, W, cost));
     let relaxed = false, runW = W;
@@ -439,7 +499,7 @@
       legs.push(sm);
       line = line.concat(k === 0 ? sm : sm.slice(1));
     }
-    G.exempt = null;
+    G.exempt = null; G.avoid = null;
     return { line, legs, order: order.slice(1).map((k) => k - 1), nodes, orders, ms: performance.now() - t0, relaxed };
   }
 
@@ -505,5 +565,5 @@
     });
   }
 
-  window.MomootPlanner = { plan, analyse, hazardImage, mergeMask, fieldImages, hazardDist, CLEAR_M, classify, setPointHazards, elevAt: (lat, lon) => G.elevAt(lat, lon), grid: () => G, init: (D) => { if (!G) G = buildGrid(D); return G; } };
+  window.MomootPlanner = { plan, analyse, hazardImage, terrainImage, TERRAIN_COLORS, mergeMask, fieldImages, hazardDist, CLEAR_M, classify, setPointHazards, elevAt: (lat, lon) => G.elevAt(lat, lon), grid: () => G, init: (D) => { if (!G) G = buildGrid(D); return G; } };
 })();

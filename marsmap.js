@@ -174,17 +174,28 @@
       this.emit("move");
     }
 
-    flyTo(lat, lon, zoom, ms = 600) {
+    // opts.arc: for a long pan, zoom out on the way and back in at the end (a fly over)
+    // opts.done: called when the flight ends
+    flyTo(lat, lon, zoom, ms = 600, opts = {}) {
       cancelAnimationFrame(this.anim);
       const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      if (reduce) return this.setView(lat, lon, zoom);
+      if (reduce) { this.setView(lat, lon, zoom); if (opts.done) opts.done(); return; }
       const a = { lat: this.center.lat, lon: this.center.lon, z: this.zoom };
       const b = { lat, lon, z: clamp(zoom ?? this.zoom, this.minZoom, this.maxZoom) };
+      let dip = 0;
+      if (opts.arc) {
+        // how many screens apart the two views are, at the lower of the two zooms
+        const zl = Math.min(a.z, b.z), W = this.worldW(zl), size = this.size();
+        const dx = ((b.lon - a.lon) / 360) * W, dy = ((b.lat - a.lat) / 180) * (W / 2);
+        const screens = Math.hypot(dx, dy) / Math.max(1, Math.min(size.w, size.h));
+        dip = screens > 0.6 ? clamp(Math.log2(screens / 0.6) + 0.6, 0, 4) : 0;
+      }
       const t0 = performance.now();
       const step = (now) => {
-        const t = ease(Math.min(1, (now - t0) / ms));
-        this.setView(a.lat + (b.lat - a.lat) * t, a.lon + (b.lon - a.lon) * t, a.z + (b.z - a.z) * t);
-        this.anim = t < 1 ? requestAnimationFrame(step) : null;
+        const raw = Math.min(1, (now - t0) / ms), t = ease(raw);
+        this.setView(a.lat + (b.lat - a.lat) * t, a.lon + (b.lon - a.lon) * t, a.z + (b.z - a.z) * t - dip * Math.sin(Math.PI * raw));
+        if (raw < 1) this.anim = requestAnimationFrame(step);
+        else { this.anim = null; if (opts.done) opts.done(); }
       };
       this.anim = requestAnimationFrame(step);
     }
