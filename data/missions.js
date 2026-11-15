@@ -187,7 +187,7 @@
         title: "Soft sand ahead", kicker: "Terrain",
         text: "Thermal data shows loose sand here. The rover could bog down, the way Spirit got stuck in 2009.",
         countdown: null,
-        source: "Loose sand vs bedrock is mapped from THEMIS thermal data (Mars Odyssey).",
+        source: "Sand fields are placed from the ripples visible in HiRISE. To check them in thermal data, open Layers and turn on THEMIS day IR (Mars Odyssey): loose sand warms up fast and shows bright.",
         choices: [
           { id: "careful", label: "Lower tyre pressure, drive slowly", hint: "Adds 20 minutes and 2 % life support.", recommended: true, effect: { o2: -2, minutes: 20 } },
           { id: "push", label: "Push through", hint: "Costs 6 % life support and 15 % rover power.", effect: { o2: -6, minutes: 10, suit: -15 } }
@@ -199,8 +199,15 @@
       { id: "Mars_MGS_MOLA_ClrShade_merge_global_463m", name: "MOLA elevation", ext: "jpg", minZoom: 0, maxNative: 7, group: "elevation", attribution: "MGS MOLA" },
       { id: "Mars_Viking_MDIM21_ClrMosaic_global_232m", name: "Viking colour", ext: "jpg", minZoom: 0, maxNative: 7, group: "imagery", attribution: "Viking MDIM 2.1, NASA/USGS" },
       { id: "CTX_beta01_uncontrolled_5m_Caltech", name: "CTX 5 m", ext: "png", minZoom: 7, maxNative: 13, group: "imagery", attribution: "MRO CTX, NASA/JPL Caltech/MSSS, Caltech Murray Lab" },
-      { id: "JEZ_hirise_soc_006_orthoMosaic_25cm_Eqc_latTs0_lon0_first_dd", name: "HiRISE 25 cm", ext: "png", minZoom: 11, maxNative: 17, group: "imagery", bounds: [[18.3068, 77.2229], [18.6693, 77.584]], attribution: "MRO HiRISE, NASA/JPL Caltech/University of Arizona, USGS" }
+      { id: "JEZ_hirise_soc_006_orthoMosaic_25cm_Eqc_latTs0_lon0_first_dd", name: "HiRISE 25 cm", ext: "png", minZoom: 11, maxNative: 17, group: "imagery", bounds: [[18.3068, 77.2229], [18.6693, 77.584]], attribution: "MRO HiRISE, NASA/JPL Caltech/University of Arizona, USGS" },
+      // Overlay: THEMIS daytime thermal infrared, 100 m per pixel (Mars Odyssey, USGS controlled mosaic).
+      // By day, loose sand and dust heat up fast and look bright; bedrock stays cooler and looks dark.
+      { id: "THEMIS_DayIR_ControlledMosaics_100m_v2_oct2018", name: "THEMIS day IR", ext: "png", minZoom: 0, maxNative: 9, group: "thermal", overlay: true, opacity: 0.7, attribution: "Mars Odyssey THEMIS, NASA/JPL/ASU, USGS controlled mosaic" }
     ],
+
+    // CRISM mineral map of Jezero (MRO). Made by tools/crism/make_crism_overlay.py from
+    // Parente et al. 2021 (UMass, GAN mineral mapping), Zenodo DOI 10.5281/zenodo.5575824 (CC BY 4.0).
+    crism: { meta: "data/crism_jezero.json", image: "data/crism_jezero.png", legend: "data/crism_legend.png" },
 
     traverseUrl: "https://mars.nasa.gov/mmgis-maps/M20/Layers/json/M20_traverse.json"
   };

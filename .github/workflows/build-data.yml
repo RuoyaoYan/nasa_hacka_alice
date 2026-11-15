@@ -1,0 +1,33 @@
+# Builds the CRISM mineral overlay and refreshes the MEDA weather copy on
+# GitHub's servers, then commits the results. Nothing runs on your laptop.
+# Runs when this file or the scripts change, and on demand (Actions tab → Run workflow).
+name: Build science data
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/build-data.yml"
+      - "tools/crism/**"
+      - "tools/weather/**"
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pillow numpy
+      - name: CRISM mineral overlay
+        run: python3 tools/crism/make_crism_overlay.py
+      - name: MEDA weather copy
+        run: python3 tools/weather/snapshot_meda.py || echo "NASA feed unreachable, keeping the bundled copy"
+      - name: Commit results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898499+github-actions[bot]@users.noreply.github.com"
+          git add data/crism_jezero.png data/crism_jezero.json data/crism_legend.png data/weather.js
+          git diff --cached --quiet && echo "Nothing changed" || (git commit -m "Build CRISM overlay and refresh MEDA weather" && git push)
