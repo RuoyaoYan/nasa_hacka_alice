@@ -52,6 +52,22 @@
   const mission = () => D.missions[state.missionIdx];
   const route = () => mission().routes[state.routeIdx];
 
+  // ---------- Developer settings ----------
+  // "Demo weather" is only for recording demo videos: it swaps the forecast for a
+  // dust storm scenario and makes the dust storm event show up early on every route.
+  // Turn it on in Settings → Developers only, or open the page with ?demo=1 (?demo=0 turns it off).
+  const DEV_KEY = "momoot.dev.demoWeather";
+  const dev = { demoWeather: false };
+  try {
+    const q = new URLSearchParams(location.search).get("demo");
+    if (q !== null) localStorage.setItem(DEV_KEY, q === "0" ? "0" : "1");
+    dev.demoWeather = localStorage.getItem(DEV_KEY) === "1";
+  } catch { /* storage blocked: demo weather stays off */ }
+  const DEMO_DUST_AT = 0.3; // fraction of the outbound leg where the demo dust storm hits
+  // the demo storm shown in the weather panel (visible dust opacity and wind)
+  const DEMO_STORM = { tau: 1.45, wind: 42, note: "Regional dust storm building" };
+  const dustBase = () => (dev.demoWeather ? ["Moderate", "warn"] : ["Low", "good"]);
+
   // ---------- Route planning ----------
   // Routes come from planner.js: a terrain cost map, Dijkstra between every
   // pair of targets, and a depth first search over visiting orders.
@@ -106,10 +122,15 @@
       const firstSand = an.hazards.find((h) => h.type === "sand"), firstRock = an.hazards.find((h) => h.type === "rock");
       if (firstRock) ev.push({ type: "rock", at: firstRock.km / r.km });
       if (firstSand) ev.push({ type: "sand", at: firstSand.km / r.km });
-      for (const w of m.weather) ev.push({ ...w });
+      if (!dev.demoWeather) for (const w of m.weather) ev.push({ ...w });
       if (r.km > 15) ev.push({ type: "radiation", at: 0.42 });
       ev.sort((x, y) => x.at - y.at);
       r.events = ev.filter((x, i) => i === 0 || x.at - ev[i - 1].at > 0.06).slice(0, 3);
+      if (dev.demoWeather) {
+        // demo videos: the dust storm always happens, early on, on every route
+        const dust = { type: "dust", at: DEMO_DUST_AT };
+        r.events = [...r.events.filter((x) => Math.abs(x.at - dust.at) > 0.06).slice(0, 2), dust].sort((x, y) => x.at - y.at);
+      }
       r.risk = clamp(1 + (firstRock ? 1 : 0) + (firstSand || r.steepKm > 0.15 ? 1 : 0), 1, 3);
       const sandF = 1 + (an.terrain.sand / 100) * RULES.sandSlowdown;
       r.minPerKm = (60 / RULES.speedKmh) * sandF;
@@ -746,16 +767,16 @@
   function renderWeather() {
     const list = medaSols();
     const box = $("#wx-today"); box.innerHTML = "";
-    $("#wx-src").textContent = state.wx.live ? "Live from NASA's MEDA feed" : `Perseverance MEDA, NASA feed copied ${WX.meda.copied || ""}`;
+    $("#wx-src").textContent = (dev.demoWeather ? "Demo storm scenario · temperatures " : "") + (state.wx.live ? "Live from NASA's MEDA feed" : `Perseverance MEDA, NASA feed copied ${WX.meda.copied || ""}`);
     const f = list[0];
     if (!f) { box.append(html("p", { class: "body-6 muted" }, "No MEDA readings available.")); return; }
     const ls = num(f.ls), du = dustAt(ls);
     const t = html("div");
-    t.append(html("p", { class: "heading-5" }, "Latest reading"), html("p", { class: "body-6 muted" }, `Perseverance sol ${f.sol} · ${f.terrestrial_date} · ${f.season}, Ls ${ls != null ? ls.toFixed(0) : "?"}°`));
+    t.append(html("p", { class: "heading-5" }, dev.demoWeather ? "Dust storm today" : "Latest reading"), html("p", { class: "body-6 muted" }, `${dev.demoWeather ? `${DEMO_STORM.note} · wind up to ${DEMO_STORM.wind} km/h · ` : ""}Perseverance sol ${f.sol} · ${f.terrestrial_date} · ${f.season}, Ls ${ls != null ? ls.toFixed(0) : "?"}°`));
     const temps = html("div", { class: "wx-temps" });
     const p = num(f.pressure);
-    temps.innerHTML = `<span class="up">▲ ${fmtT(num(f.max_temp))}</span><span>${p != null ? p.toFixed(0) + " Pa" : "n/a"}</span><span class="down">▼ ${fmtT(num(f.min_temp))}</span><span>${du ? "Dust τ " + du.mean.toFixed(2) : ""}</span>`;
-    box.append(sunIcon(du ? du.mean * 2.6 : 0), t, temps);
+    temps.innerHTML = `<span class="up">▲ ${fmtT(num(f.max_temp))}</span><span>${p != null ? p.toFixed(0) + " Pa" : "n/a"}</span><span class="down">▼ ${fmtT(num(f.min_temp))}</span><span>${dev.demoWeather ? "Dust τ " + DEMO_STORM.tau.toFixed(2) : du ? "Dust τ " + du.mean.toFixed(2) : ""}</span>`;
+    box.append(sunIcon(dev.demoWeather ? DEMO_STORM.tau : du ? du.mean * 2.6 : 0), t, temps);
     const more = $("#wx-more"); more.innerHTML = "";
     for (const d of list.slice(1, 6)) {
       const row = html("div", { class: "wx-row" });
@@ -769,6 +790,7 @@
     tips.append(html("p", { class: "title-4" }, "What the data means for today's EVA"));
     const ul = html("ul");
     const tip = (icon, text) => { const li = html("li"); li.innerHTML = `<i class="ph ${icon}" aria-hidden="true"></i>`; li.append(document.createTextNode(text)); ul.append(li); };
+    if (dev.demoWeather) tip("ph-cloud-warning", `Dust storm: visible dust opacity τ ${DEMO_STORM.tau.toFixed(2)}, winds up to ${DEMO_STORM.wind} km/h. Sightseeing and rim climbs are closed. Keep the tour short and close to the habitat.`);
     if (f.sunrise && f.sunset) tip("ph-sun-horizon", `Daylight ${hhmm(f.sunrise)} to ${hhmm(f.sunset)} local mean solar time. Plan to be back an hour before sunset.`);
     const lo = num(f.min_temp);
     if (lo != null) tip("ph-thermometer-cold", `Night low ${fmtT(lo)}: rover batteries and suit heaters need the full overnight charge.`);
@@ -1085,7 +1107,7 @@
       run.returnPath = slice(run.r, 0, run.km).reverse();
       renderChecklist();
     }
-    if (type === "dust") setTimeout(() => setCond("#cond-dust", "Low", "good"), 4000);
+    if (type === "dust") setTimeout(() => setCond("#cond-dust", ...dustBase()), 4000);
     if (type === "radiation") setTimeout(() => setCond("#cond-rad", "Normal", "good"), 4000);
     if (run.o2 <= 0) { run.o2 = 0; run.rescued = true; run.log.push("Life support ran out. A rescue rover came from the habitat"); return finish(); }
     setScreen("eva");
@@ -1247,7 +1269,7 @@
     state.run = null; state.playerMarker = null;
     $("#stop-card").hidden = true;
     $("#crew-alert").hidden = true;
-    setCond("#cond-dust", "Low", "good"); setCond("#cond-rad", "Normal", "good");
+    setCond("#cond-dust", ...dustBase()); setCond("#cond-rad", "Normal", "good");
     setScreen("plan");
     renderPlan(); buildMarkers(); drawOverlays(); fitRoute();
   }
@@ -1454,15 +1476,37 @@
   $("#btn-sources-close").addEventListener("click", () => { $("#sources").hidden = true; });
   $("#sources").addEventListener("click", (e) => { if (e.target.id === "sources") $("#sources").hidden = true; });
 
+  // Settings: developer options for recording demo videos
+  function syncDevUi() {
+    $("#dev-demo-weather").checked = dev.demoWeather;
+    $("#dev-demo-state").textContent = dev.demoWeather ? "On: dust storm today, storm event early on every route" : "Off: normal forecast";
+  }
+  $("#btn-settings").addEventListener("click", () => { syncDevUi(); $("#settings").hidden = false; $("#btn-settings-close").focus(); });
+  $("#btn-settings-close").addEventListener("click", () => { $("#settings").hidden = true; });
+  $("#settings").addEventListener("click", (e) => { if (e.target.id === "settings") $("#settings").hidden = true; });
+  $("#dev-demo-weather").addEventListener("change", (e) => {
+    dev.demoWeather = e.target.checked;
+    try { localStorage.setItem(DEV_KEY, dev.demoWeather ? "1" : "0"); } catch { /* applies until reload */ }
+    syncDevUi();
+    replanAll();
+    renderWeather();
+    if (!state.run) setCond("#cond-dust", ...dustBase());
+    toast(dev.demoWeather
+      ? `Demo weather on.${state.run ? " It applies from the next EVA." : " The dust storm now hits early on every route."}`
+      : `Demo weather off.${state.run ? " It applies from the next EVA." : " Back to the normal forecast."}`);
+  });
+
   document.addEventListener("keydown", (e) => {
     if (e.target.matches('input:not([type="checkbox"]), textarea')) return;
     const k = e.key.toLowerCase();
     if (k === "escape" && !$("#photo").hidden) { closePhoto(); return; }
     if (k === "escape") {
       if (!$("#sources").hidden) { $("#sources").hidden = true; return; }
+      if (!$("#settings").hidden) { $("#settings").hidden = true; $("#btn-settings").focus(); return; }
       if ($("#map-card").classList.contains("full")) { $("#btn-full").click(); return; }
       if (!$("#layer-panel").hidden) { $("#btn-layers").click(); return; }
     }
+    if (!$("#settings").hidden) return; // no game shortcuts while Settings is open
     if (k === "d" && !e.metaKey && !e.ctrlKey) {
       state.drawMode = !state.drawMode;
       if (!state.drawMode) state.drawPts = [];
@@ -1800,6 +1844,7 @@
   applyWeather();
   loadLiveWeather();
   $("#tasks-sol").textContent = D.sol;
+  setCond("#cond-dust", ...dustBase());
   renderPlan();
   buildMarkers();
   const v0 = map.fitBounds([D.habitat.pos, ...mission().routes.flatMap((r) => r.dense)], 90, 16.5);
