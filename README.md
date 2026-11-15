@@ -222,7 +222,15 @@ later option pays extra for running within ~250 m of the lines already planned, 
 the three options take visibly different lines. Press
 **Change your mind?** on the route page to go back to the task page, add or drop
 tasks, and confirm: all three routes are redesigned, the map flies over to them
-and draws each one in.
+and draws each one in. The first plan of a session starts from the whole of Mars,
+flies down into Jezero, and sweeps the hazard scan across the imagery so you see
+the hills, boulders and small craters it found before the routes appear.
+
+**Detail in the imagery shapes every route.** All three options pay a little more
+the closer they get to anything the HiRISE scan found (fading out over a few
+hundred metres), and the final straightening step only replaces a bend with a
+straight line when the line costs no more in total. On open, even ground the
+route is straight; among boulders and rough patches it weaves between them.
 
 **Map area.** About 17 × 22 km: Jezero's crater floor, Séítah, the delta, Belva,
 the western rim and, beyond it, **Lac de Charmes**, where Perseverance has driven

@@ -104,6 +104,7 @@
   const CLEAR_M = 50;   // safe routes never come closer than this to a detected hazard
   const BUFFER_M = 70;
   const RELAX_PEN = 150;  // extra cost fades out over this distance beyond the margin
+  const DETAIL_M = 450;   // detected detail (hills, boulders, rough ground) affects cost out to this distance
   function cellCost(G, i, W) {
     const sl = G.slope[i];
     const safe = W.rock === Infinity;
@@ -127,6 +128,10 @@
       c += 0.8 * t * t;
     }
     if (x & 64) c += 0.4 + (W.rock === Infinity ? 0.6 : 0.2); // rough ground is slower
+    // detail seen in the HiRISE scan (hills, boulders, small craters, rough ground): every profile
+    // pays a little more the closer it gets, so routes weave between them instead of cutting across
+    if (W.detail && hd < DETAIL_M) c += W.detail * Math.exp(-hd / 120);
+    if (W.detail && (x & 64)) c += 0.5 * W.detail;
     if (W.terrain) c += W.terrain[terrainAt(i)] || 0;   // each profile likes or dislikes each terrain type
     if (G.avoid && W.avoid && G.avoid[i]) c += W.avoid * G.avoid[i]; // keep away from the other route options
     return c + pen;
@@ -359,25 +364,30 @@
   // straight line is just as safe (no cell costlier than the path it replaces).
   function pullString(cells, W) {
     if (cells.length < 3) return cells;
-    const out = [cells[0]];
     const rc = (i) => [(i / G.cols) | 0, i % G.cols];
+    const fin = (x) => (x === Infinity ? 60 : x); // targets can sit on steep cells; never let that open the gate
+    // cost of the grid path up to each cell (cell cost x step length), like Dijkstra measured it
+    const cum = [0];
+    for (let k = 1; k < cells.length; k++) {
+      const [r0, c0] = rc(cells[k - 1]), [r1, c1] = rc(cells[k]);
+      cum.push(cum[k - 1] + Math.hypot(r1 - r0, c1 - c0) * (fin(cellCost(G, cells[k - 1], W)) + fin(cellCost(G, cells[k], W))) / 2);
+    }
+    const out = [cells[0]];
     let a = 0;
     while (a < cells.length - 1) {
       let best = a + 1;
-      let maxCost = 1;
-      const fin = (x) => (x === Infinity ? 60 : x); // targets can sit on steep cells; never let that open the gate
-      for (let b = a + 1; b < cells.length && b < a + 40; b++) {
-        maxCost = Math.max(maxCost, fin(cellCost(G, cells[b], W)));
+      for (let b = a + 2; b < cells.length && b < a + 40; b++) {
         const [r0, c0] = rc(cells[a]), [r1, c1] = rc(cells[b]);
-        const steps = Math.ceil(Math.hypot(r1 - r0, c1 - c0) * 4);
-        let ok = true;
+        const len = Math.hypot(r1 - r0, c1 - c0), steps = Math.ceil(len * 4);
+        let sum = 0, ok = true;
         for (let s = 1; s < steps && ok; s++) {
           const r = Math.floor(r0 + 0.5 + ((r1 - r0) * s) / steps), c = Math.floor(c0 + 0.5 + ((c1 - c0) * s) / steps);
-          const i = r * G.cols + c;
-          const cc = cellCost(G, i, W);
-          if (cc === Infinity || cc > maxCost * 1.05) ok = false;
+          const cc = cellCost(G, r * G.cols + c, W);
+          if (cc === Infinity) ok = false; else sum += cc;
         }
-        if (ok) best = b;
+        // straighten only where it costs no more than the bends it replaces: on even ground the
+        // staircase becomes a line, but bends around hills, boulders and rough patches stay
+        if (ok && (sum / Math.max(1, steps - 1)) * len <= (cum[b] - cum[a]) * 1.01) best = b;
       }
       out.push(cells[best]);
       a = best;

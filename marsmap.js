@@ -14,6 +14,7 @@
   const CIRC_M = 2 * Math.PI * MARS_RADIUS_M;
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const ease = (t) => 1 - Math.pow(1 - t, 3); // decelerates into place
+  const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2); // slow start and end, for long fly ins
 
   const TREK = "https://trek.nasa.gov/tiles/Mars/EQ";
 
@@ -175,7 +176,7 @@
     }
 
     // opts.arc: for a long pan, zoom out on the way and back in at the end (a fly over)
-    // opts.done: called when the flight ends
+    // opts.done: called when the flight ends. opts.easeInOut: slow start and end
     flyTo(lat, lon, zoom, ms = 600, opts = {}) {
       cancelAnimationFrame(this.anim);
       const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -192,7 +193,7 @@
       }
       const t0 = performance.now();
       const step = (now) => {
-        const raw = Math.min(1, (now - t0) / ms), t = ease(raw);
+        const raw = Math.min(1, (now - t0) / ms), t = opts.easeInOut ? easeInOut(raw) : ease(raw);
         this.setView(a.lat + (b.lat - a.lat) * t, a.lon + (b.lon - a.lon) * t, a.z + (b.z - a.z) * t - dip * Math.sin(Math.PI * raw));
         if (raw < 1) this.anim = requestAnimationFrame(step);
         else { this.anim = null; if (opts.done) opts.done(); }

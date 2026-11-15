@@ -110,14 +110,15 @@
 
     // Risk profiles used to plan the three route options
     profiles: {
+      // detail: cost of driving close to hills, boulders, small craters and rough ground found in the HiRISE scan.
       // terrain: extra cost per km on each terrain type. avoid: how hard it keeps away from the
       // options planned before it (planOrder), so the three options take visibly different lines.
       safest:  { label: "Safest", note: "Avoids slopes over 12°, every boulder field and megabreccia", color: "#2E9E52", maxSlope: 12, steep: 6, sand: 4, rock: Infinity, bonus: false,
-                 terrain: { channel: 0.6, ridges: 1.2, rim: 1.0, margin: 0.4, crater: 3 }, avoid: 1.2, planOrder: 2 },
+                 detail: 1.2, terrain: { channel: 0.6, ridges: 1.2, rim: 1.0, margin: 0.4, crater: 3 }, avoid: 1.2, planOrder: 2 },
       fastest: { label: "Fastest", note: "Shortest distance, accepts sand, rocks and steeper ground", color: "#2F6FD6", maxSlope: 25, steep: 0.2, sand: 0.15, rock: 0.4, bonus: false,
-                 terrain: { megabreccia: 0.8 }, avoid: 0, planOrder: 1 },
+                 detail: 0.9, terrain: { megabreccia: 0.8 }, avoid: 0, planOrder: 1 },
       easiest: { label: "Easiest", note: "Flattest ground: keeps to the crater floor and channels, avoids sand, ridges and rough rock", color: "#8A4FE0", maxSlope: 8, steep: 18, sand: 12, rock: Infinity, bonus: false,
-                 terrain: { floor: -0.2, channel: -0.2, delta: 0.8, margin: 1.5, ridges: 3, rim: 3, crater: 5, megabreccia: 8 }, avoid: 2.2, planOrder: 3 }
+                 detail: 2.0, terrain: { floor: -0.2, channel: -0.2, delta: 0.8, margin: 1.5, ridges: 3, rim: 3, crater: 5, megabreccia: 8 }, avoid: 2.2, planOrder: 3 }
     },
 
     // Every task the crew can pick today. "points" is an internal priority weight
