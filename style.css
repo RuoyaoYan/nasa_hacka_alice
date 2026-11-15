@@ -267,6 +267,11 @@ body:not([data-screen="eva"]):not([data-screen="event"]):not([data-screen="end"]
 .attribution { right: 0; bottom: 0; max-width: 70%; background: rgba(255,255,255,0.82); padding: var(--s-25) var(--s-75); color: var(--text-2); text-align: right; }
 .map-status { top: var(--s-200); left: 50%; transform: translateX(-50%); background: var(--surface); border: 1px solid var(--bad); color: var(--bad); padding: var(--s-75) var(--s-100); max-width: 60%; }
 .map-status[hidden] { display: none; }
+/* caption shown during the Mars → Jezero → hazard scan animation */
+.scan-caption { top: var(--s-200); left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: var(--s-75); max-width: 70%;
+  padding: var(--s-75) var(--s-200); background: rgba(29, 28, 26, 0.86); color: #FFFFFF; border-left: 3px solid #FFD84D; pointer-events: none; }
+.scan-caption i { color: #FFD84D; font-size: 18px; flex: none; }
+.scan-caption[hidden] { display: none; }
 
 /* ---------- Overlays and modals ---------- */
 .overlay { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; background: rgba(29, 28, 26, 0.45); padding: var(--s-300); transition: opacity var(--t-move) var(--ease); }

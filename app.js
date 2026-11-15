@@ -210,6 +210,15 @@
   const gTraverse = svg("g", {}, map.svg);
   const gRoutes = svg("g", {}, map.svg);
   const gEva = svg("g", {}, map.svg);
+  // scan sweep: the detected relief is clipped to the part of the map the scan line has passed
+  const defs = svg("defs", {}, map.svg);
+  const scanClip = svg("rect", { x: 0, y: 0, width: 0, height: 0 }, svg("clipPath", { id: "scan-clip" }, defs));
+  const glow = svg("linearGradient", { id: "scan-glow", x1: 0, x2: 1, y1: 0, y2: 0 }, defs);
+  svg("stop", { offset: 0, "stop-color": "#FFD84D", "stop-opacity": 0 }, glow);
+  svg("stop", { offset: 1, "stop-color": "#FFD84D", "stop-opacity": 0.45 }, glow);
+  const gScanFx = svg("g", { style: "display:none", "pointer-events": "none" }, map.svg);
+  const scanBand = svg("rect", { y: 0, width: 140, fill: "url(#scan-glow)" }, gScanFx);
+  const scanLine = svg("rect", { y: 0, width: 3, fill: "#FFD84D" }, gScanFx);
 
   // HTML markers
   let markers = [];
@@ -263,8 +272,17 @@
       el.setAttribute("x", a.x); el.setAttribute("y", a.y);
       el.setAttribute("width", Math.max(1, b.x - a.x)); el.setAttribute("height", Math.max(1, b.y - a.y));
     }
-    // hazard map from the planner's cost grid
-    gHaz.style.display = state.showHazards ? "" : "none";
+    // hazard map from the planner's cost grid (hidden, then swept in, during the scan animation)
+    const ra = state.routeAnim;
+    gHaz.style.display = state.showHazards && !(ra && ra.hideHaz && ra.sweep == null) ? "" : "none";
+    if (ra && ra.sweep != null) {
+      const sz = map.size(), x = ra.sweep * sz.w;
+      gHaz.setAttribute("clip-path", "url(#scan-clip)");
+      scanClip.setAttribute("width", x); scanClip.setAttribute("height", sz.h);
+      gScanFx.style.display = "";
+      scanBand.setAttribute("x", x - 140); scanBand.setAttribute("height", sz.h);
+      scanLine.setAttribute("x", x - 1.5); scanLine.setAttribute("height", sz.h);
+    } else { gHaz.removeAttribute("clip-path"); gScanFx.style.display = "none"; }
     if (state.showHazards) {
       const [[s, w], [n, e]] = hazImg.bounds;
       const a = map.toScreen(n, w), b = map.toScreen(s, e);
@@ -422,24 +440,55 @@
     const t = (performance.now() - a.t0 - k * REVEAL.stagger) / REVEAL.dur;
     return t <= 0 ? 0 : t >= 1 ? 1 : 1 - Math.pow(1 - t, 2);
   }
-  function revealRoutes(flyMs = 1400) {
+  // withScan (first plan of the session): start from the whole of Mars, fly down into Jezero,
+  // sweep the hazard scan across the imagery to show the relief it found, then draw the routes
+  function revealRoutes(flyMs = 1400, withScan = false) {
     const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reduce) { state.routeAnim = null; fitRoute(true, 0); drawOverlays(); return; }
-    const anim = state.routeAnim = { t0: null };
-    drawOverlays();
+    const scan = withScan && state.scan && state.showHazards;
+    const anim = state.routeAnim = { t0: null, hideHaz: !!scan, sweep: null };
     const m = mission(), pts = [D.habitat.pos, ...m.routes.flatMap((r) => r.dense)];
     const v = map.fitBounds(pts, 90, 16.5);
-    map.flyTo(v.lat, v.lon, v.zoom, flyMs, { arc: true, done: () => {
+    if (withScan) { map.setView(v.lat, v.lon, map.minZoom); scanCaption("Jezero crater, Mars", "ph-globe-hemisphere-east"); }
+    drawOverlays();
+    map.flyTo(v.lat, v.lon, v.zoom, withScan ? 3600 : flyMs, { arc: !withScan, easeInOut: withScan, done: () => {
+      if (state.routeAnim !== anim) return;
+      if (scan) sweepScan(anim, drawRoutes); else { if (withScan) scanCaption(null); drawRoutes(); }
+    } });
+    function drawRoutes() {
       if (state.routeAnim !== anim) return;
       anim.t0 = performance.now();
       const total = REVEAL.dur + REVEAL.stagger * (m.routes.length - 1);
       const tick = () => {
         if (state.routeAnim !== anim) return;
         drawOverlays();
-        if (performance.now() - anim.t0 < total) requestAnimationFrame(tick); else { state.routeAnim = null; drawOverlays(); }
+        if (performance.now() - anim.t0 < total) requestAnimationFrame(tick);
+        else { state.routeAnim = null; drawOverlays(); if (scan) setTimeout(() => { if (!state.routeAnim) scanCaption(null); }, 1800); }
       };
       requestAnimationFrame(tick);
-    } });
+    }
+  }
+  // the scan line crosses the map; behind it the relief the scan found appears
+  function sweepScan(anim, next) {
+    const res = state.scan, dur = 2400, t0 = performance.now();
+    scanCaption(`Scanning ${res.source} imagery for shadows next to sunlit slopes…`, "ph-scan");
+    const tick = (now) => {
+      if (state.routeAnim !== anim) { scanCaption(null); return; }
+      anim.sweep = Math.min(1, (now - t0) / dur);
+      drawOverlays();
+      if (anim.sweep < 1) { requestAnimationFrame(tick); return; }
+      anim.sweep = null; anim.hideHaz = false; drawOverlays();
+      scanCaption(`Found ${res.found.coarse.toLocaleString("en")} hills or crater walls and ${res.found.fine.toLocaleString("en")} boulders or small craters. Routes keep clear of them.`, "ph-check-circle");
+      setTimeout(next, 500);
+    };
+    requestAnimationFrame(tick);
+  }
+  function scanCaption(text, icon) {
+    const c = $("#scan-caption");
+    if (!text) { c.hidden = true; return; }
+    c.innerHTML = `<i class="ph ${icon || "ph-scan"}" aria-hidden="true"></i>`;
+    c.append(document.createTextNode(text));
+    c.hidden = false;
   }
 
   function fitRoute(all = true, ms = 700) {
@@ -940,7 +989,7 @@
 
   // ---------- EVA ----------
   function startEva() {
-    state.routeAnim = null;
+    state.routeAnim = null; scanCaption(null);
     const m = mission(), r = route();
     state.run = {
       m, r, km: 0, dir: 1, maxKm: 0,
@@ -1552,7 +1601,8 @@
       setScreen("plan");
       state.routeAnim = { t0: null }; // hide the new lines until the map has flown over
       renderPlan(); buildMarkers(); drawOverlays();
-      setTimeout(() => revealRoutes(), 300); // once the task page has faded out
+      const first = !state.scanShown; state.scanShown = true;
+      setTimeout(() => revealRoutes(1400, first), 300); // once the task page has faded out
       $(".plan-only.side-scroll").scrollTop = 0;
       toast(`Route planned for ${state.draft.size} task${state.draft.size > 1 ? "s" : ""}.`);
       $("#btn-start").focus({ preventScroll: true });
