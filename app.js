@@ -52,6 +52,22 @@
   const mission = () => D.missions[state.missionIdx];
   const route = () => mission().routes[state.routeIdx];
 
+  // ---------- Developer settings ----------
+  // "Demo weather" is only for recording demo videos: it swaps the forecast for a
+  // dust storm scenario and makes the dust storm event show up early on every route.
+  // Turn it on in Settings → Developers only, or open the page with ?demo=1 (?demo=0 turns it off).
+  const DEV_KEY = "momoot.dev.demoWeather";
+  const dev = { demoWeather: false };
+  try {
+    const q = new URLSearchParams(location.search).get("demo");
+    if (q !== null) localStorage.setItem(DEV_KEY, q === "0" ? "0" : "1");
+    dev.demoWeather = localStorage.getItem(DEV_KEY) === "1";
+  } catch { /* storage blocked: demo weather stays off */ }
+  const DEMO_DUST_AT = 0.3; // fraction of the outbound leg where the demo dust storm hits
+  // the demo storm shown in the weather panel (visible dust opacity and wind)
+  const DEMO_STORM = { tau: 1.45, wind: 42, note: "Regional dust storm building" };
+  const dustBase = () => (dev.demoWeather ? ["Moderate", "warn"] : ["Low", "good"]);
+
   // ---------- Route planning ----------
   // Routes come from planner.js: a terrain cost map, Dijkstra between every
   // pair of targets, and a depth first search over visiting orders.
@@ -106,10 +122,15 @@
       const firstSand = an.hazards.find((h) => h.type === "sand"), firstRock = an.hazards.find((h) => h.type === "rock");
       if (firstRock) ev.push({ type: "rock", at: firstRock.km / r.km });
       if (firstSand) ev.push({ type: "sand", at: firstSand.km / r.km });
-      for (const w of m.weather) ev.push({ ...w });
+      if (!dev.demoWeather) for (const w of m.weather) ev.push({ ...w });
       if (r.km > 15) ev.push({ type: "radiation", at: 0.42 });
       ev.sort((x, y) => x.at - y.at);
       r.events = ev.filter((x, i) => i === 0 || x.at - ev[i - 1].at > 0.06).slice(0, 3);
+      if (dev.demoWeather) {
+        // demo videos: the dust storm always happens, early on, on every route
+        const dust = { type: "dust", at: DEMO_DUST_AT };
+        r.events = [...r.events.filter((x) => Math.abs(x.at - dust.at) > 0.06).slice(0, 2), dust].sort((x, y) => x.at - y.at);
+      }
       r.risk = clamp(1 + (firstRock ? 1 : 0) + (firstSand || r.steepKm > 0.15 ? 1 : 0), 1, 3);
       const sandF = 1 + (an.terrain.sand / 100) * RULES.sandSlowdown;
       r.minPerKm = (60 / RULES.speedKmh) * sandF;
@@ -746,16 +767,16 @@
   function renderWeather() {
     const list = medaSols();
     const box = $("#wx-today"); box.innerHTML = "";
-    $("#wx-src").textContent = state.wx.live ? "Live from NASA's MEDA feed" : `Perseverance MEDA, NASA feed copied ${WX.meda.copied || ""}`;
+    $("#wx-src").textContent = (dev.demoWeather ? "Demo storm scenario · temperatures " : "") + (state.wx.live ? "Live from NASA's MEDA feed" : `Perseverance MEDA, NASA feed copied ${WX.meda.copied || ""}`);
     const f = list[0];
     if (!f) { box.append(html("p", { class: "body-6 muted" }, "No MEDA readings available.")); return; }
     const ls = num(f.ls), du = dustAt(ls);
     const t = html("div");
-    t.append(html("p", { class: "heading-5" }, "Latest reading"), html("p", { class: "body-6 muted" }, `Perseverance sol ${f.sol} · ${f.terrestrial_date} · ${f.season}, Ls ${ls != null ? ls.toFixed(0) : "?"}°`));
+    t.append(html("p", { class: "heading-5" }, dev.demoWeather ? "Dust storm today" : "Latest reading"), html("p", { class: "body-6 muted" }, `${dev.demoWeather ? `${DEMO_STORM.note} · wind up to ${DEMO_STORM.wind} km/h · ` : ""}Perseverance sol ${f.sol} · ${f.terrestrial_date} · ${f.season}, Ls ${ls != null ? ls.toFixed(0) : "?"}°`));
     const temps = html("div", { class: "wx-temps" });
     const p = num(f.pressure);
-    temps.innerHTML = `<span class="up">▲ ${fmtT(num(f.max_temp))}</span><span>${p != null ? p.toFixed(0) + " Pa" : "n/a"}</span><span class="down">▼ ${fmtT(num(f.min_temp))}</span><span>${du ? "Dust τ " + du.mean.toFixed(2) : ""}</span>`;
-    box.append(sunIcon(du ? du.mean * 2.6 : 0), t, temps);
+    temps.innerHTML = `<span class="up">▲ ${fmtT(num(f.max_temp))}</span><span>${p != null ? p.toFixed(0) + " Pa" : "n/a"}</span><span class="down">▼ ${fmtT(num(f.min_temp))}</span><span>${dev.demoWeather ? "Dust τ " + DEMO_STORM.tau.toFixed(2) : du ? "Dust τ " + du.mean.toFixed(2) : ""}</span>`;
+    box.append(sunIcon(dev.demoWeather ? DEMO_STORM.tau : du ? du.mean * 2.6 : 0), t, temps);
     const more = $("#wx-more"); more.innerHTML = "";
     for (const d of list.slice(1, 6)) {
       const row = html("div", { class: "wx-row" });
@@ -769,6 +790,7 @@
     tips.append(html("p", { class: "title-4" }, "What the data means for today's EVA"));
     const ul = html("ul");
     const tip = (icon, text) => { const li = html("li"); li.innerHTML = `<i class="ph ${icon}" aria-hidden="true"></i>`; li.append(document.createTextNode(text)); ul.append(li); };
+    if (dev.demoWeather) tip("ph-cloud-warning", `Dust storm: visible dust opacity τ ${DEMO_STORM.tau.toFixed(2)}, winds up to ${DEMO_STORM.wind} km/h. Sightseeing and rim climbs are closed. Keep the tour short and close to the habitat.`);
     if (f.sunrise && f.sunset) tip("ph-sun-horizon", `Daylight ${hhmm(f.sunrise)} to ${hhmm(f.sunset)} local mean solar time. Plan to be back an hour before sunset.`);
     const lo = num(f.min_temp);
     if (lo != null) tip("ph-thermometer-cold", `Night low ${fmtT(lo)}: rover batteries and suit heaters need the full overnight charge.`);
@@ -1085,7 +1107,7 @@
       run.returnPath = slice(run.r, 0, run.km).reverse();
       renderChecklist();
     }
-    if (type === "dust") setTimeout(() => setCond("#cond-dust", "Low", "good"), 4000);
+    if (type === "dust") setTimeout(() => setCond("#cond-dust", ...dustBase()), 4000);
     if (type === "radiation") setTimeout(() => setCond("#cond-rad", "Normal", "good"), 4000);
     if (run.o2 <= 0) { run.o2 = 0; run.rescued = true; run.log.push("Life support ran out. A rescue rover came from the habitat"); return finish(); }
     setScreen("eva");
@@ -1247,7 +1269,7 @@
     state.run = null; state.playerMarker = null;
     $("#stop-card").hidden = true;
     $("#crew-alert").hidden = true;
-    setCond("#cond-dust", "Low", "good"); setCond("#cond-rad", "Normal", "good");
+    setCond("#cond-dust", ...dustBase()); setCond("#cond-rad", "Normal", "good");
     setScreen("plan");
     renderPlan(); buildMarkers(); drawOverlays(); fitRoute();
   }
@@ -1263,11 +1285,27 @@
   const MAX_TASKS = 7;
   state.draft = new Set();
   state.planned = false;
+  // Hard weather: during the (demo) dust storm, tasks with a "storm" reason are closed
+  const stormToday = () => dev.demoWeather;
+  const closedReason = (t) => (t.storm && stormToday() ? t.storm : null);
+  // drop closed tasks from the plan; if nothing is left, fall back to the everyday tasks
+  function pruneClosed() {
+    let dropped = 0;
+    for (const m of D.missions) {
+      const sel = state.selected[m.id];
+      for (const id of [...sel]) { const t = D.tasks.find((x) => x.id === id); if (t && closedReason(t)) { sel.delete(id); dropped++; } }
+      if (!sel.size) D.tasks.filter((t) => t.today && !closedReason(t)).slice(0, 3).forEach((t) => sel.add(t.id));
+    }
+    if (state.draft) for (const id of [...state.draft]) { const t = D.tasks.find((x) => x.id === id); if (t && closedReason(t)) state.draft.delete(id); }
+    return dropped;
+  }
   function distClass(km) { return km < 2.5 ? ["dist-near", "Near"] : km < 5 ? ["dist-mid", "Medium"] : ["dist-far", "Far"]; }
   function taskCard(t) {
-    const li = html("li", { class: "task" });
+    const closed = closedReason(t);
+    const li = html("li", { class: closed ? "task closed" : "task" });
     const id = `task-${t.id}`;
-    const cb = html("input", { type: "checkbox", id }); cb.checked = state.draft.has(t.id);
+    const cb = html("input", { type: "checkbox", id }); cb.checked = !closed && state.draft.has(t.id);
+    if (closed) { cb.disabled = true; cb.setAttribute("aria-describedby", `${id}-closed`); }
     cb.addEventListener("change", () => {
       if (cb.checked && state.draft.size >= MAX_TASKS) { cb.checked = false; toast(`One EVA fits at most ${MAX_TASKS} tasks. Untick one first.`); return; }
       if (cb.checked) state.draft.add(t.id); else state.draft.delete(t.id);
@@ -1285,10 +1323,16 @@
     const meta = html("p", { class: "t-meta caption-4" });
     meta.innerHTML = `<span><strong>${priority(t)}</strong> priority</span><span><strong>${t.minutes}</strong> min on site</span><span>Returns <strong>1 ${PRODUCT[t.type][0]}</strong></span><span class="t-dist ${dc}" data-id="${t.id}">${dl} · ${km.toFixed(1)} km</span>`;
     body.append(html("p", { class: "title-3" }, t.name), html("p", { class: "body-6 muted" }, t.detail), meta);
+    if (closed) {
+      const why = html("p", { class: "t-closed caption-4", id: `${id}-closed` });
+      why.innerHTML = `<i class="ph ph-cloud-warning" aria-hidden="true"></i>`; why.append(document.createTextNode(`Not available today: ${closed}`));
+      body.append(why);
+    }
     lab.append(body);
     li.append(cb, lab);
     renderPhoto(fig, t.id, t.name, false);
     box.append(type, chk);
+    if (closed) box.append(html("span", { class: "t-closed-badge caption-5" }, "Closed · dust storm"));
     const p = D.photos[t.id];
     if (p) lab.append(html("small", { class: "t-credit" }, `${p.caption} · ${p.credit || "NASA/JPL-Caltech/ASU/MSSS"}`));
     return li;
@@ -1296,6 +1340,10 @@
   function renderTaskPage() {
     const today = $("#task-today"), far = $("#task-far"), sight = $("#task-sight");
     today.innerHTML = ""; far.innerHTML = ""; sight.innerHTML = "";
+    if (state.draft) for (const id of [...state.draft]) { const t = D.tasks.find((x) => x.id === id); if (t && closedReason(t)) state.draft.delete(id); }
+    const nClosed = D.tasks.filter(closedReason).length, note = $("#tasks-storm");
+    note.hidden = !nClosed;
+    if (nClosed) { note.innerHTML = `<i class="ph ph-cloud-warning" aria-hidden="true"></i>`; note.append(document.createTextNode(`Dust storm today (dust τ ${DEMO_STORM.tau.toFixed(2)}). ${nClosed} tasks are closed: sightseeing and the rim climbs. They show in grey and cannot be picked.`)); }
     for (const t of D.tasks) (t.group === "sight" ? sight : t.today ? today : far).append(taskCard(t));
     const nFar = D.tasks.filter((t) => !t.today && t.group !== "sight").length;
 
@@ -1356,7 +1404,7 @@
       : "Life support use: none yet. The line marks the 30 % reserve.";
     // 3) best fit: what to add next
     const have = new Set(picked.map((t) => t.type));
-    const cands = D.tasks.filter((t) => !state.draft.has(t.id)).map((t) => {
+    const cands = D.tasks.filter((t) => !state.draft.has(t.id) && !closedReason(t)).map((t) => {
       const k2 = tourKm(site.pos, [...picked, t]), dk = k2 - km;
       const fresh = !have.has(t.type);
       const value = PRIO_VALUE[priority(t)] + (fresh ? 1 : 0);
@@ -1454,15 +1502,40 @@
   $("#btn-sources-close").addEventListener("click", () => { $("#sources").hidden = true; });
   $("#sources").addEventListener("click", (e) => { if (e.target.id === "sources") $("#sources").hidden = true; });
 
+  // Settings: developer options for recording demo videos
+  function syncDevUi() {
+    $("#dev-demo-weather").checked = dev.demoWeather;
+    $("#dev-demo-state").textContent = dev.demoWeather ? "On: dust storm today, storm event early on every route" : "Off: normal forecast";
+  }
+  $("#btn-settings").addEventListener("click", () => { syncDevUi(); $("#settings").hidden = false; $("#btn-settings-close").focus(); });
+  $("#btn-settings-close").addEventListener("click", () => { $("#settings").hidden = true; });
+  $("#settings").addEventListener("click", (e) => { if (e.target.id === "settings") $("#settings").hidden = true; });
+  $("#dev-demo-weather").addEventListener("change", (e) => {
+    dev.demoWeather = e.target.checked;
+    try { localStorage.setItem(DEV_KEY, dev.demoWeather ? "1" : "0"); } catch { /* applies until reload */ }
+    syncDevUi();
+    const dropped = pruneClosed();
+    replanAll();
+    renderWeather();
+    if (state.screen === "tasks") renderTaskPage();
+    if (!state.run) setCond("#cond-dust", ...dustBase());
+    const closedMsg = dev.demoWeather ? ` Sightseeing and rim climbs are closed${dropped ? `; ${dropped} closed task${dropped > 1 ? "s were" : " was"} taken off the plan` : ""}.` : "";
+    toast(dev.demoWeather
+      ? `Demo weather on.${state.run ? " It applies from the next EVA." : " The dust storm now hits early on every route."}${closedMsg}`
+      : `Demo weather off.${state.run ? " It applies from the next EVA." : " Back to the normal forecast and all tasks open."}`);
+  });
+
   document.addEventListener("keydown", (e) => {
     if (e.target.matches('input:not([type="checkbox"]), textarea')) return;
     const k = e.key.toLowerCase();
     if (k === "escape" && !$("#photo").hidden) { closePhoto(); return; }
     if (k === "escape") {
       if (!$("#sources").hidden) { $("#sources").hidden = true; return; }
+      if (!$("#settings").hidden) { $("#settings").hidden = true; $("#btn-settings").focus(); return; }
       if ($("#map-card").classList.contains("full")) { $("#btn-full").click(); return; }
       if (!$("#layer-panel").hidden) { $("#btn-layers").click(); return; }
     }
+    if (!$("#settings").hidden) return; // no game shortcuts while Settings is open
     if (k === "d" && !e.metaKey && !e.ctrlKey) {
       state.drawMode = !state.drawMode;
       if (!state.drawMode) state.drawPts = [];
@@ -1800,6 +1873,7 @@
   applyWeather();
   loadLiveWeather();
   $("#tasks-sol").textContent = D.sol;
+  setCond("#cond-dust", ...dustBase());
   renderPlan();
   buildMarkers();
   const v0 = map.fitBounds([D.habitat.pos, ...mission().routes.flatMap((r) => r.dense)], 90, 16.5);
