@@ -11,12 +11,12 @@ and rough terrain force you to adapt on the way.
 
 [![Momoot demo: pick today's tasks, get three routes over NASA imagery, then change your mind and replan](docs/demo/momoot_demo.gif)](docs/demo/momoot_demo.mp4)
 
-A 15 second walkthrough (sped up): pick today's tasks and a landing site, watch the
+A 30 second walkthrough: pick today's tasks and a landing site, watch the
 hazard scan sweep the HiRISE imagery, compare the Safest, Fastest and Easiest routes
 with their route details, then press **Change your mind?**, add tasks, and see all
 three routes redesigned.
 
-▶ **[Watch the full quality MP4](https://ruoyaoyan.github.io/nasa_hacka_alice/docs/demo/momoot_demo.mp4)** (1080p, no sound)
+▶ **[Watch the full quality MP4](https://ruoyaoyan.github.io/nasa_hacka_alice/docs/demo/momoot_demo.mp4)** (1080p, 29 s, no sound)
 
 ## ▶ Play now
 
