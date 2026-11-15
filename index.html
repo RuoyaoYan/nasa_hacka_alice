@@ -11,7 +11,7 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23C2410C'/%3E%3Cpath d='M6 22 L13 12 L18 18 L21 14 L26 22Z' fill='%23fff'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
   <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css">
-  <link rel="stylesheet" href="style.css?v=20261114o">
+  <link rel="stylesheet" href="style.css?v=20261115a">
 </head>
 <body data-screen="intro">
   <a class="skip-link button-sm" href="#side">Skip to mission details</a>
@@ -110,6 +110,15 @@
           <dl class="stats" id="route-stats"></dl>
         </section>
 
+        <section class="block intel" aria-labelledby="intel-title">
+          <div class="row-between">
+            <h2 class="heading-6" id="intel-title">Crew intel on this route</h2>
+            <span class="caption-5 muted" id="intel-count"></span>
+          </div>
+          <p class="body-6 muted" id="intel-lead"></p>
+          <ol class="intel-list" id="intel-list"></ol>
+        </section>
+
         <section class="block" aria-labelledby="rd-title">
           <h2 class="heading-5" id="rd-title">Route details</h2>
           <h3 class="title-2">Elevation</h3>
@@ -143,7 +152,7 @@
         </section>
 
         <section class="block" aria-labelledby="wx-title">
-          <div class="row-between"><h2 class="heading-5" id="wx-title">Weather</h2><span class="caption-5 muted">Based on MEDA and REMS records</span></div>
+          <div class="row-between"><h2 class="heading-5" id="wx-title">Weather</h2><span class="caption-5 muted" id="wx-src">Perseverance MEDA</span></div>
           <div class="wx-today card-soft" id="wx-today"></div>
           <div class="wx-more" id="wx-more" hidden></div>
           <button class="wp-link body-5 wx-toggle" id="wx-toggle" type="button" aria-expanded="false">Show more sols</button>
@@ -152,7 +161,15 @@
 
         <section class="block" aria-labelledby="hl-title">
           <h2 class="heading-5" id="hl-title">Crew photo points</h2>
-          <p class="body-6 muted">Photos and notes left by earlier crews. Press <kbd class="key">P</kbd> during an EVA to leave one for the next astronaut. Hazard reports change future routes.</p>
+          <p class="body-6 muted">A shared map that every crew adds to. Press <kbd class="key">P</kbd> during an EVA to leave a note for the next astronaut. When you pass someone's note you can confirm it or report it gone. Active hazard reports change everyone's routes.</p>
+          <div class="crew-log-bar">
+            <p class="caption-4" id="crew-log-stats"></p>
+            <div class="crew-log-actions">
+              <button class="btn btn-ghost button-sm" id="btn-log-export" type="button"><i class="ph ph-upload-simple" aria-hidden="true"></i>Send crew log</button>
+              <label class="btn btn-ghost button-sm" for="log-import"><i class="ph ph-download-simple" aria-hidden="true"></i>Load a crew log</label>
+              <input type="file" id="log-import" accept="application/json,.json" class="sr-only">
+            </div>
+          </div>
           <ul class="highlights" id="highlights"></ul>
         </section>
 
@@ -205,6 +222,17 @@
           <button class="btn btn-primary button-md wide" id="btn-sample" type="button"></button>
         </section>
 
+        <section class="block crew-alert" id="crew-alert" aria-live="polite" hidden>
+          <p class="caption-3 overline"><i id="ca-icon" class="ph-fill ph-warning" aria-hidden="true"></i><span id="ca-kicker">Crew note ahead</span></p>
+          <p class="title-2" id="ca-title"></p>
+          <p class="body-6 muted" id="ca-note"></p>
+          <p class="caption-5 muted" id="ca-by"></p>
+          <div class="ca-actions">
+            <button class="btn btn-primary button-sm" id="btn-ca-yes" type="button">Still there <kbd class="key">Y</kbd></button>
+            <button class="btn btn-ghost button-sm" id="btn-ca-no" type="button">Gone now <kbd class="key">N</kbd></button>
+          </div>
+        </section>
+
         <section class="block">
           <button class="btn btn-ghost button-md wide" id="btn-photo" type="button"><i class="ph ph-camera" aria-hidden="true"></i>Log a photo point for the next crew <kbd class="key">P</kbd></button>
           <p class="caption-5 muted" id="photo-count"></p>
@@ -234,6 +262,17 @@
           <label class="opt body-6"><input type="checkbox" id="ov-hazards" checked> Hazard map: steep slopes, detected hazards, boulders, sand</label>
           <label class="opt body-6"><input type="checkbox" id="ov-photos" checked> Crew photo points</label>
           <label class="opt body-6"><input type="checkbox" id="ov-traverse"> Perseverance's real path <span class="caption-5 muted" id="traverse-note"></span></label>
+          <p class="title-5 muted">Science data</p>
+          <label class="opt body-6"><input type="checkbox" id="ov-themis"> <span>Sand vs bedrock: THEMIS day IR, 100 m <span class="caption-5 muted">(Mars Odyssey)</span></span></label>
+          <div class="legend" id="themis-legend" hidden>
+            <span class="ramp ramp-themis" aria-hidden="true"></span>
+            <span class="caption-5 legend-ends"><span>Cool by day: rock</span><span>Warm by day: sand, dust</span></span>
+          </div>
+          <label class="opt body-6"><input type="checkbox" id="ov-crism"> <span>Minerals: CRISM map of Jezero <span class="caption-5 muted">(MRO)</span> <span class="caption-5 muted" id="crism-note"></span></span></label>
+          <div class="legend" id="crism-legend" hidden>
+            <img alt="CRISM colour key: each colour is one spectral class in the mineral map" src="">
+            <span class="caption-5 muted">Each colour is one mineral class from CRISM spectra. Brighter means a closer match. Parente et al. 2021, CC BY 4.0</span>
+          </div>
         </div>
       </div>
 
@@ -248,7 +287,7 @@
 
       <div class="mm-ctl ctl-scale" aria-hidden="true"><span class="scale-bar" id="scale-bar"></span><span class="caption-4" id="scale-label"></span></div>
       <div class="mm-ctl ctl-coords caption-5" id="coords" aria-hidden="true"></div>
-      <p class="mm-ctl attribution caption-5" id="attribution">Imagery: <a href="https://trek.nasa.gov/mars/" target="_blank" rel="noopener">NASA Mars Trek</a> · HiRISE NASA/JPL/UArizona/USGS · CTX NASA/JPL/MSSS, Murray Lab · Viking NASA/USGS · MOLA NASA/GSFC</p>
+      <p class="mm-ctl attribution caption-5" id="attribution">Imagery: <a href="https://trek.nasa.gov/mars/" target="_blank" rel="noopener">NASA Mars Trek</a> · HiRISE NASA/JPL/UArizona/USGS · CTX NASA/JPL/MSSS, Murray Lab · Viking NASA/USGS · MOLA NASA/GSFC · THEMIS NASA/JPL/ASU</p>
       <p class="mm-ctl map-status body-5" id="map-status" role="status" hidden></p>
     </section>
   </div>
@@ -285,11 +324,27 @@
   <!-- End -->
   <div class="overlay" id="end" role="dialog" aria-modal="true" aria-labelledby="end-title" hidden>
     <div class="modal end">
+      <div class="end-hero" id="end-hero">
+        <svg class="end-replay" id="end-replay" viewBox="0 0 560 220" role="img" aria-label="Replay of the route you drove"></svg>
+        <div class="end-burst" id="end-burst" aria-hidden="true"></div>
+        <span class="end-stamp" id="end-stamp"></span>
+      </div>
       <p class="caption-3 overline" id="end-kicker">EVA complete</p>
       <h2 class="heading-3" id="end-title"></h2>
       <p class="body-3 muted" id="end-text"></p>
       <dl class="stats end-stats" id="end-stats"></dl>
-      <ol class="log body-6" id="end-log"></ol>
+      <ul class="end-return" id="end-return" aria-label="Science return"></ul>
+      <div class="end-crew" id="end-crew">
+        <div>
+          <p class="title-4">Left for the next crew</p>
+          <p class="body-6 muted" id="end-crew-text"></p>
+        </div>
+        <button class="btn btn-ghost button-sm" id="btn-end-export" type="button"><i class="ph ph-upload-simple" aria-hidden="true"></i>Send crew log</button>
+      </div>
+      <details class="end-logbox">
+        <summary class="title-4">EVA log</summary>
+        <ol class="log body-6" id="end-log"></ol>
+      </details>
       <div class="end-actions">
         <button class="btn btn-primary button-md" id="btn-again" type="button">Plan another walk</button>
         <button class="btn btn-ghost button-md" id="btn-retry" type="button">Retry this route</button>
@@ -335,10 +390,12 @@
           <tr><td>Wide map</td><td>Viking MDIM 2.1 colour mosaic, 232 m per pixel, via Mars Trek</td><td>Optical</td></tr>
           <tr><td>Elevation</td><td>MOLA colour shaded relief, 463 m per pixel (Mars Global Surveyor), via Mars Trek</td><td>Topographic</td></tr>
           <tr><td>Perseverance path</td><td>Mars 2020 traverse published by NASA JPL</td><td>Rover data</td></tr>
-          <tr><td>Science targets</td><td>CRISM mineral maps, Mars Reconnaissance Orbiter</td><td>Spectral</td></tr>
-          <tr><td>Sand vs bedrock</td><td>THEMIS thermal data, Mars Odyssey</td><td>Thermal</td></tr>
-          <tr><td>Dust events</td><td>Perseverance MEDA and Curiosity REMS weather data</td><td>Atmospheric</td></tr>
-          <tr><td>Radiation events</td><td>Curiosity RAD measurements</td><td>Radiation</td></tr>
+          <tr><td>Minerals layer</td><td>CRISM mineral map of Jezero (MRO CRISM HRL000040FF, FRT000047A3, FRT0005C5E, FRS00031442), Parente et al. 2021, <a href="https://doi.org/10.5281/zenodo.5575824" target="_blank" rel="noopener">Zenodo</a>, CC BY 4.0</td><td>Spectral</td></tr>
+          <tr><td>Sand vs bedrock layer</td><td>THEMIS daytime infrared controlled mosaic, 100 m per pixel (Mars Odyssey, ASU, USGS), via Mars Trek</td><td>Thermal</td></tr>
+          <tr><td>Weather panel</td><td>Perseverance MEDA daily temperature and pressure, from <a href="https://mars.nasa.gov/mars2020/weather/" target="_blank" rel="noopener">NASA's weather feed</a> (live when the browser can reach it)</td><td>Atmospheric</td></tr>
+          <tr><td>Dust season and dust event</td><td>Column dust opacity at Jezero by season, Mars Years 24 to 36, Montabone et al. 2015 and 2020 dust climatology, CC BY-SA 3.0</td><td>Atmospheric</td></tr>
+          <tr><td>Radiation background</td><td>Curiosity RAD surface average, 0.64 mSv per sol (Hassler et al. 2014)</td><td>Radiation</td></tr>
+          <tr><td>Crew photo points</td><td>Notes, hazard reports and HiRISE snapshots logged by players, shared as a crew log file</td><td>Crowd</td></tr>
         </tbody>
       </table>
       <p class="caption-5 muted">Map tiles load live from NASA Mars Trek. Habitat, targets and routes are placed approximately for gameplay. Life support, speed and dose follow simple game rules, not real mission figures.</p>
@@ -355,11 +412,12 @@
     if (b) { b.hidden = false; b.querySelector("code").textContent = e.message + " (" + (e.filename || "").split("/").pop() + ":" + e.lineno + ")"; }
   });
   </script>
-  <script src="data/missions.js?v=20261114o"></script>
-  <script src="data/m20_waypoints.js?v=20261114o"></script>
-  <script src="marsmap.js?v=20261114o"></script>
-  <script src="planner.js?v=20261114o"></script>
-  <script src="hazardscan.js?v=20261114o"></script>
-  <script src="app.js?v=20261114o"></script>
+  <script src="data/missions.js?v=20261115a"></script>
+  <script src="data/m20_waypoints.js?v=20261115a"></script>
+  <script src="data/weather.js?v=20261115a"></script>
+  <script src="marsmap.js?v=20261115a"></script>
+  <script src="planner.js?v=20261115a"></script>
+  <script src="hazardscan.js?v=20261115a"></script>
+  <script src="app.js?v=20261115a"></script>
 </body>
 </html>

@@ -75,8 +75,9 @@ deploy from branch) and share the link.
 | Route details | Elevation profile on the Mars datum (Jezero floor about −2,560 m), steep stretches in orange, target markers. Click and drag to get uphill, downhill, highest and lowest point for that part; it is highlighted on the map |
 | Climbs and descents | Each climb or descent with category, average grade, height gain and length. Click one to select it |
 | Terrain types and surfaces | Kilometres of crater floor, delta deposits, rim slopes and sand fields, and of bedrock, gravel, loose sand, rough ground and boulders |
-| Weather | Today plus the next sols: high and low temperature, dust opacity τ, wind, and tips. Illustrative values within the ranges Perseverance MEDA and Curiosity REMS recorded |
-| Crew photo points | Notes and HiRISE snapshots left by earlier crews and by you |
+| Weather | Perseverance MEDA's latest sols: high and low temperature, pressure, sunrise and sunset, live from NASA's feed when the browser can reach it. Dust opacity for the season from the Montabone dust climatology |
+| Crew intel on this route | Every crew note within 200 m of the selected route, in the order you will pass it, with how many later crews confirmed it |
+| Crew photo points | The shared map of notes and HiRISE snapshots left by earlier crews and by you |
 
 ![Dust storm event](docs/screenshots/event.png)
 
@@ -87,11 +88,13 @@ deploy from branch) and share the link.
 | Base map | HiRISE 25 cm and CTX 5 m imagery (Mars Reconnaissance Orbiter), Viking colour mosaic, live from [Mars Trek](https://trek.nasa.gov/mars/) | Optical |
 | Elevation layer | MOLA colour shaded relief (Mars Global Surveyor) via Mars Trek | Topographic |
 | Perseverance path | Mars 2020 traverse published by NASA JPL | Rover data |
-| Science targets | CRISM mineral maps (MRO) | Spectral |
-| Sand vs bedrock | THEMIS thermal data (Mars Odyssey) | Thermal |
+| Minerals layer | CRISM mineral map of Jezero (MRO), [Parente et al. 2021, Zenodo](https://doi.org/10.5281/zenodo.5575824), CC BY 4.0. Built by `tools/crism/make_crism_overlay.py` | Spectral |
+| Sand vs bedrock layer | THEMIS daytime infrared controlled mosaic, 100 m (Mars Odyssey), live from Mars Trek | Thermal |
 | Stop photos | Perseverance raw images gallery | Ground imagery |
-| Dust events | Perseverance MEDA and Curiosity REMS weather data | Atmospheric |
-| Radiation events | Curiosity RAD measurements | Radiation |
+| Weather panel | Perseverance MEDA daily temperature and pressure, [NASA weather feed](https://mars.nasa.gov/mars2020/weather/), live with a bundled copy as fallback | Atmospheric |
+| Dust season, dust event | Column dust opacity at Jezero by season, Mars Years 24 to 36, Montabone et al. 2015 and 2020, CC BY-SA 3.0 | Atmospheric |
+| Radiation background | Curiosity RAD surface average, 0.64 mSv per sol (Hassler et al. 2014) | Radiation |
+| Crew photo points | Notes, hazard reports and ratings logged by crews, passed on as a crew log file | Crowd sourced |
 
 ## The map: real NASA imagery
 
@@ -105,6 +108,8 @@ Higher resolution layers fade in as you zoom:
 | Regional | MRO CTX global mosaic (Caltech Murray Lab) | about 5 m per pixel |
 | Close up | MRO HiRISE orthomosaic of the Mars 2020 landing site (USGS) | 25 cm per pixel |
 | Optional | MGS MOLA colour shaded elevation | 463 m per pixel |
+| Overlay | Mars Odyssey THEMIS day IR (sand warm and bright, rock cool and dark) | 100 m per pixel |
+| Overlay | MRO CRISM mineral map of Jezero, with the dataset's own colour key | 18 to 36 m per pixel (CRISM targeted images) |
 
 Drag to pan, scroll or use **+ / −** to zoom, and use the layers button to
 switch base maps or show Perseverance's real path (loaded from NASA JPL if its
@@ -130,6 +135,57 @@ first version. Lookout Hill comes out at −1,774 m against −1,786 m measured.
 closest one the rover imaged), loaded from NASA's servers when the game runs.
 The list, with PIA numbers and credits, is `photos` in `data/missions.js`. If an
 image cannot load, the card shows a HiRISE view of the exact spot instead.
+
+## Science layers and weather
+
+**THEMIS day IR (Layers → Sand vs bedrock).** By day, loose sand and dust heat up
+fast and show bright; bedrock stays cooler and shows dark. The tiles load live from
+Mars Trek (`THEMIS_DayIR_ControlledMosaics_100m_v2_oct2018`). Zoom out a little:
+each pixel is 100 m.
+
+**CRISM minerals (Layers → Minerals).** Run once to build the overlay from the
+public CRISM mineral map of Jezero (1.4 MB, needs only Pillow and numpy):
+
+```bash
+python3 tools/crism/make_crism_overlay.py
+```
+
+It downloads `jezeroFinal.tif` and its colour key `jezeroEM.png` from Zenodo, reads
+the GeoTIFF georeference, makes null pixels transparent and writes
+`data/crism_jezero.png`, `data/crism_jezero.json` (bounds, credits) and
+`data/crism_legend.png`. Commit those three files. Until they exist the layer
+switch is greyed out and says so.
+
+**Weather.** The panel shows what Perseverance's MEDA station measured: high and
+low temperature, pressure, sunrise and sunset. The game asks NASA's feed first and
+falls back to the copy in `data/weather.js`; refresh that copy with
+`python3 tools/weather/snapshot_meda.py`. Dust opacity comes from the Montabone
+climatology for the Jezero cell at the same season (Ls), and the dust storm event
+quotes the real number for that season: average τ 0.36, up to τ 0.70 in Mars Year 25.
+
+## Crew photo points: a map every crew adds to
+
+Komoot gets better because every hiker leaves highlights. Momoot does the same on Mars:
+
+1. **Before you leave**, *Crew intel on this route* lists every note within 200 m
+   of the route you picked, in driving order, with who left it and how many later
+   crews confirmed it. Active hazard reports already push the routes away.
+2. **On the way**, each note pops up as the rover reaches it. Press `Y` (still
+   there / helpful) or `N` (gone now / not useful). A hazard that more crews report
+   gone than confirm stops blocking routes; one that keeps being confirmed stays.
+3. **Leave your own** with `P`: hazard, tip, science or view, with a HiRISE
+   snapshot of the spot. Hazards re plan every route straight away.
+4. **Hand it over.** *Send crew log* saves your notes and ratings as a JSON file;
+   *Load a crew log* on another device merges them (no duplicates, ratings merged,
+   every field checked). That file is the crew handover.
+
+## The finish page
+
+When you get home the EVA report replays your drive: the route draws itself on a
+dusk sky, each finished stop pops in with a tick, the outcome stamp lands (Mission
+complete, Safe return, Rescued), then tasks, life support, EVA time and dose count
+up, followed by your science return and what you left for the next crew. With
+*reduce motion* turned on, everything appears at once.
 
 ## How routes are planned
 
@@ -211,8 +267,8 @@ These are simple game rules, **not real mission figures**:
 - Rover speed 6 km/h on firm ground, up to 50 % slower on sand
 - Life support: 1.5 % per km, plus 0.5 % per 20 m climbed, plus 2 % per target
 - 30 minutes per stop
-- Radiation background uses roughly the surface average Curiosity's RAD measured
-  (about 0.64 mSv per day); event doses are game values
+- Radiation background uses the surface average Curiosity's RAD measured
+  (0.64 mSv per day, Hassler et al. 2014); event doses are game values
 
 ## Tasks
 
@@ -220,7 +276,7 @@ These are simple game rules, **not real mission figures**:
 |---|---|---|
 | Clay sample at Hawksbill Gap, Three Forks sample depot, wind reading in Séítah, landing site survey, Enchanted Lake mudstone | Belva crater panorama, Kodiak at sunrise, South Séítah ridges, Neretva Vallis overlook, Jezero rim skyline | Kodiak butte, Séítah sand, Belva crater wall, upper fan boulders, isolated hill, northern fan lobe, Neretva Vallis inlet, Lookout Hill rim rock, rim slope radiation, southern rim outcrop |
 
-The task with the most points becomes the main task. A tour over 15 km adds a
+The task with the highest priority becomes the main task. A tour over 15 km adds a
 radiation event on the open slopes.
 
 Landmark positions and the terrain model are approximate, for gameplay.
@@ -234,8 +290,11 @@ marsmap.js          small slippy map engine for NASA Mars Trek tiles
 planner.js          terrain cost map, Dijkstra, DFS visiting order, smoothing
 hazardscan.js       live hazard detection on HiRISE tiles (port of hazards.py)
 tools/terrain_hazard/  Python hazard grid from the HiRISE DTM and orthoimage
+tools/crism/        builds the CRISM mineral overlay from the Zenodo GeoTIFF
+tools/weather/      refreshes the MEDA copy in data/weather.js from NASA's feed
 app.js              planning, route overlays, EVA loop, events, scoring
-data/missions.js    missions, routes, stops, events, terrain
+data/missions.js    missions, routes, stops, events, terrain, map layers
+data/weather.js     MEDA copy and Jezero dust climatology
 assets/fonts/       Poppins (SIL Open Font License)
 docs/               proposal, build plan, mockups, screenshots
 ```
@@ -252,6 +311,9 @@ easing curve (`cubic-bezier(0.22, 1, 0.36, 1)`), visible focus rings,
 
 - Built by Alice for NASA Space Apps 2026
 - Mars data: NASA, JPL Caltech, University of Arizona (HiRISE), JHU APL (CRISM),
-  ASU (THEMIS), MSSS (CTX)
+  ASU (THEMIS), MSSS (CTX), USGS Astrogeology
+- CRISM mineral map: Parente et al. 2021, Zenodo DOI 10.5281/zenodo.5575824, CC BY 4.0
+- Dust climatology: Montabone et al. 2015 (Icarus 251) and 2020 (JGR Planets), CC BY-SA 3.0
+- Weather: Perseverance MEDA, NASA/JPL-Caltech, Centro de Astrobiología
 - Font: Poppins by Indian Type Foundry, SIL Open Font License
 - Icons: [Phosphor Icons](https://phosphoricons.com), MIT License

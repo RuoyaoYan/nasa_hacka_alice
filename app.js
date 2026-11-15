@@ -149,6 +149,8 @@
   for (const def of D.mapLayers) L[def.id] = map.addTrekLayer(Object.assign({}, def));
   const layerIds = D.mapLayers.map((d) => d.id);
   const MOLA = layerIds[0], VIKING = layerIds[1], CTX = layerIds[2], HIRISE = layerIds[3];
+  const THEMIS = layerIds.find((id) => id.startsWith("THEMIS"));
+  if (THEMIS) map.setVisible(L[THEMIS], false); // overlay, off until ticked
 
   function setBase(mode) {
     map.setVisible(L[MOLA], mode === "mola");
@@ -168,6 +170,7 @@
   map.on("render", () => { if (Object.values(L).some((l) => l.loads > 0)) $("#map-status").hidden = true; });
 
   // SVG overlay groups
+  const gCrism = svg("g", { style: "display:none" }, map.svg);
   const gHaz = svg("g", {}, map.svg);
   let hazImg = Planner.hazardImage(D);
   const hazEl = svg("image", { href: hazImg.url, preserveAspectRatio: "none", opacity: 0.6, style: "image-rendering: pixelated" }, gHaz);
@@ -210,6 +213,14 @@
   }
 
   function drawOverlays() {
+    // CRISM mineral map, under the hazards
+    gCrism.style.display = state.showCrism && state.crism ? "" : "none";
+    if (state.showCrism && state.crism) {
+      const [[s, w], [n, e]] = state.crism.bounds;
+      const a = map.toScreen(n, w), b = map.toScreen(s, e);
+      state.crism.el.setAttribute("x", a.x); state.crism.el.setAttribute("y", a.y);
+      state.crism.el.setAttribute("width", Math.max(1, b.x - a.x)); state.crism.el.setAttribute("height", Math.max(1, b.y - a.y));
+    }
     // hazard map from the planner's cost grid
     gHaz.style.display = state.showHazards ? "" : "none";
     if (state.showHazards) {
@@ -309,7 +320,7 @@
     if (state.showHazards) {
       for (const ev of r.events) {
         if (ev.type === "rock" || ev.type === "sand") {
-          list.push({ pos: pointAt(r, ev.at), el: pinEl("hazard", "!", ev.type === "rock" ? "Boulder field" : "Soft sand", ev.type === "rock" ? "HiRISE" : "THEMIS") });
+          list.push({ pos: pointAt(r, ev.at), el: pinEl("hazard", "!", ev.type === "rock" ? "Boulder field" : "Soft sand", ev.type === "rock" ? "HiRISE" : "HiRISE ripples · see THEMIS layer") });
         }
       }
     }
@@ -401,6 +412,36 @@
   document.querySelectorAll('input[name="base"]').forEach((r) => r.addEventListener("change", (e) => setBase(e.target.value)));
   $("#ov-routes").addEventListener("change", (e) => { state.showRoutes = e.target.checked; drawOverlays(); });
   $("#ov-hazards").addEventListener("change", (e) => { state.showHazards = e.target.checked; buildMarkers(); drawOverlays(); });
+  // THEMIS daytime thermal infrared (Mars Odyssey), live Mars Trek tiles
+  $("#ov-themis").addEventListener("change", (e) => {
+    map.setVisible(L[THEMIS], e.target.checked);
+    $("#themis-legend").hidden = !e.target.checked;
+    if (e.target.checked && map.zoom > 12.5) toast("THEMIS pixels are 100 m wide, so zoom out to see the sand and bedrock pattern.");
+  });
+  // CRISM mineral map (MRO), made by tools/crism/make_crism_overlay.py
+  function loadCrism() {
+    return fetch(D.crism.meta, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("missing"))))
+      .then((meta) => {
+        const el = svg("image", { href: D.crism.image, preserveAspectRatio: "none", opacity: 0.8 }, gCrism);
+        state.crism = { bounds: meta.bounds, el, meta };
+        $("#crism-legend img").src = D.crism.legend;
+        $("#crism-note").textContent = "";
+        $("#ov-crism").disabled = false;
+        drawOverlays();
+      })
+      .catch(() => {
+        $("#ov-crism").disabled = true;
+        $("#crism-note").textContent = "(not built yet: run tools/crism/make_crism_overlay.py)";
+      });
+  }
+  $("#ov-crism").addEventListener("change", (e) => {
+    state.showCrism = e.target.checked;
+    $("#crism-legend").hidden = !e.target.checked;
+    if (e.target.checked) { const [[s, w], [n, ee]] = state.crism.bounds; const v = map.fitBounds([[s, w], [n, ee]], 40, 15); if (map.zoom < v.zoom - 2 || map.zoom > v.zoom + 3) map.flyTo(v.lat, v.lon, v.zoom, 700); }
+    drawOverlays();
+  });
+  loadCrism();
   $("#ov-traverse").addEventListener("change", (e) => {
     state.showTraverse = e.target.checked;
     if (state.showTraverse && !state.traverse) loadTraverse(); else drawOverlays();
@@ -528,6 +569,7 @@
     renderClimbs(r);
     renderSurfaces(r);
     renderWeather();
+    renderRouteNotes(r);
     renderHighlights();
   }
 
@@ -656,13 +698,44 @@
     draw("#surf-bar", "#surf-list", sKm, SURF_NAMES);
   }
 
-  // Sol forecast (illustrative, within the ranges Perseverance MEDA and Curiosity REMS recorded)
-  const FORECAST = [
-    { sol: 23, hi: -22, lo: -81, tau: 0.62, wind: 14, note: "Clear, light dust" },
-    { sol: 24, hi: -20, lo: -79, tau: 0.71, wind: 18, note: "Afternoon gusts" },
-    { sol: 25, hi: -26, lo: -84, tau: 1.10, wind: 27, note: "Regional dust, avoid long EVAs" },
-    { sol: 26, hi: -24, lo: -80, tau: 0.84, wind: 16, note: "Clearing" }
-  ];
+  // Measured weather: Perseverance MEDA (live NASA feed, or the copy in data/weather.js)
+  // and the dust climatology for this season at Jezero (Montabone et al.)
+  const WX = window.MOMOOT_WEATHER || { meda: { sols: [] }, dust: null };
+  state.wx = { sols: WX.meda.sols, live: false };
+  const num = (v) => (typeof v === "number" ? v : v === "--" || v == null || v === "" ? null : Number(v));
+  const fmtT = (v) => (v == null || Number.isNaN(v) ? "n/a" : `${v < 0 ? "−" : ""}${Math.abs(v).toFixed(0)} °C`);
+  const hhmm = (t) => (t || "").slice(0, 5);
+  function dustAt(ls) {
+    const d = WX.dust; if (!d || ls == null) return null;
+    const b = clamp(Math.floor(ls / d.binDeg), 0, d.mean.length - 1);
+    return { mean: d.mean[b], max: d.max[b], year: d.maxYear[b], bin: [b * d.binDeg, (b + 1) * d.binDeg] };
+  }
+  function medaSols() {
+    // newest first, keep sols that measured at least one value
+    return [...state.wx.sols].filter((s) => num(s.max_temp) != null || num(s.pressure) != null).sort((a, b) => Number(b.sol) - Number(a.sol));
+  }
+  function loadLiveWeather() {
+    if (!WX.meda.feed || !window.fetch) return;
+    const ctl = window.AbortController ? new AbortController() : null;
+    const timer = setTimeout(() => ctl && ctl.abort(), 5000);
+    fetch(WX.meda.feed, { signal: ctl ? ctl.signal : undefined })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((feed) => {
+        if (!feed || !Array.isArray(feed.sols) || !feed.sols.length) throw new Error("empty");
+        state.wx = { sols: feed.sols, live: true };
+        renderWeather(); applyWeather();
+      })
+      .catch(() => {})
+      .finally(() => clearTimeout(timer));
+  }
+  // The dust event and the top bar use the same measured values
+  function applyWeather() {
+    const s = medaSols()[0]; if (!s) return;
+    const hi = num(s.max_temp);
+    if (hi != null) $("#cond-temp").textContent = fmtT(hi);
+    const du = dustAt(num(s.ls));
+    if (du) D.events.dust.source = `Dust season at Jezero: at this time of year (Ls ${du.bin[0]}° to ${du.bin[1]}°) the dust opacity averages τ ${du.mean.toFixed(2)} and reached τ ${du.max.toFixed(2)} in Mars Year ${du.year} (Montabone et al. dust climatology). Temperatures from Perseverance MEDA.`;
+  }
   function sunIcon(tau) {
     const s = svg("svg", { viewBox: "0 0 64 64", class: "wx-icon", "aria-hidden": "true" });
     for (let k = 0; k < 16; k++) { const ang = (k / 16) * Math.PI * 2; svg("line", { x1: 32 + Math.cos(ang) * 16, y1: 32 + Math.sin(ang) * 16, x2: 32 + Math.cos(ang) * 29, y2: 32 + Math.sin(ang) * 29, stroke: "#E8762C", "stroke-width": 4, "stroke-linecap": "round" }, s); }
@@ -671,29 +744,38 @@
     return s;
   }
   function renderWeather() {
-    const f = FORECAST[0];
+    const list = medaSols();
     const box = $("#wx-today"); box.innerHTML = "";
-    const t = html("div"); t.append(html("p", { class: "heading-5" }, "Today"), html("p", { class: "body-3 muted" }, `Sol ${f.sol} · ${f.note}`));
+    $("#wx-src").textContent = state.wx.live ? "Live from NASA's MEDA feed" : `Perseverance MEDA, NASA feed copied ${WX.meda.copied || ""}`;
+    const f = list[0];
+    if (!f) { box.append(html("p", { class: "body-6 muted" }, "No MEDA readings available.")); return; }
+    const ls = num(f.ls), du = dustAt(ls);
+    const t = html("div");
+    t.append(html("p", { class: "heading-5" }, "Latest reading"), html("p", { class: "body-6 muted" }, `Perseverance sol ${f.sol} · ${f.terrestrial_date} · ${f.season}, Ls ${ls != null ? ls.toFixed(0) : "?"}°`));
     const temps = html("div", { class: "wx-temps" });
-    temps.innerHTML = `<span class="up">▲ ${f.hi} °C</span><span>Dust τ ${f.tau.toFixed(2)}</span><span class="down">▼ ${f.lo} °C</span><span>Wind ${f.wind} km/h</span>`;
-    box.append(sunIcon(f.tau), t, temps);
+    const p = num(f.pressure);
+    temps.innerHTML = `<span class="up">▲ ${fmtT(num(f.max_temp))}</span><span>${p != null ? p.toFixed(0) + " Pa" : "n/a"}</span><span class="down">▼ ${fmtT(num(f.min_temp))}</span><span>${du ? "Dust τ " + du.mean.toFixed(2) : ""}</span>`;
+    box.append(sunIcon(du ? du.mean * 2.6 : 0), t, temps);
     const more = $("#wx-more"); more.innerHTML = "";
-    for (const d of FORECAST.slice(1)) {
+    for (const d of list.slice(1, 6)) {
       const row = html("div", { class: "wx-row" });
-      row.append(html("span", { class: "title-4" }, `Sol ${d.sol} · ${d.note}`), html("span", {}, `▲ ${d.hi} °C`), html("span", { class: "muted" }, `▼ ${d.lo} °C`), html("span", {}, `τ ${d.tau.toFixed(2)}`));
-      if (d.tau > 1) row.style.borderLeft = "4px solid #C27803";
+      const pp = num(d.pressure);
+      row.append(html("span", { class: "title-4" }, `Sol ${d.sol} · ${d.terrestrial_date}`), html("span", {}, `▲ ${fmtT(num(d.max_temp))}`), html("span", { class: "muted" }, `▼ ${fmtT(num(d.min_temp))}`), html("span", {}, pp != null ? `${pp.toFixed(0)} Pa` : "n/a"));
       more.append(row);
     }
+    $("#wx-toggle").hidden = list.length < 2;
     const tips = $("#wx-tips");
     tips.innerHTML = "";
-    tips.append(html("p", { class: "title-4" }, "Additional weather tips"));
+    tips.append(html("p", { class: "title-4" }, "What the data means for today's EVA"));
     const ul = html("ul");
     const tip = (icon, text) => { const li = html("li"); li.innerHTML = `<i class="ph ${icon}" aria-hidden="true"></i>`; li.append(document.createTextNode(text)); ul.append(li); };
-    tip("ph-wind", `Max wind speed: ${f.wind} km/h`);
-    tip("ph-sun-horizon", "Best EVA window: 10:00 to 15:00 local solar time");
-    tip("ph-radioactive", "Background radiation about 0.64 mSv per sol (Curiosity RAD average)");
-    tip("ph-cloud", "Sol 25 dust opacity above 1: plan a short tour or stay in");
+    if (f.sunrise && f.sunset) tip("ph-sun-horizon", `Daylight ${hhmm(f.sunrise)} to ${hhmm(f.sunset)} local mean solar time. Plan to be back an hour before sunset.`);
+    const lo = num(f.min_temp);
+    if (lo != null) tip("ph-thermometer-cold", `Night low ${fmtT(lo)}: rover batteries and suit heaters need the full overnight charge.`);
+    if (du) tip("ph-cloud", `Dust season check: at Ls ${du.bin[0]}° to ${du.bin[1]}° the dust opacity averages τ ${du.mean.toFixed(2)} (9.3 µm), but reached τ ${du.max.toFixed(2)} in Mars Year ${du.year}. A storm can arrive within sols.`);
+    tip("ph-radioactive", "Background radiation about 0.64 mSv per sol, the surface average Curiosity's RAD measured (Hassler et al. 2014).");
     tips.append(ul);
+    tips.append(html("p", { class: "caption-5 muted" }, `Temperature and pressure: Perseverance MEDA via NASA's weather feed. Dust: ${WX.dust ? WX.dust.source : "n/a"}. Your crew's sol counter is separate from Perseverance's.`));
   }
   $("#wx-toggle").addEventListener("click", () => {
     const m = $("#wx-more"); m.hidden = !m.hidden;
@@ -769,9 +851,12 @@
       stopIdx: 0, eventIdx: 0, paused: false, fast: false, kmPerSec: r.km / RULES.tourSeconds,
       atStop: null, returnedEarly: false, rescued: false, lowWarned: false,
       done: new Set(["leave"]), skipped: new Set(),
+      notes: notesAlong(r, 0.15).map((n) => ({ ...n, shown: false })), alert: null, votes: 0, photos: 0,
+      started: Date.now(),
       log: [`Left the habitat in the rover on the ${r.label.toLowerCase()} route`]
     };
     $("#stop-card").hidden = true;
+    $("#crew-alert").hidden = true;
     $("#photo-count").textContent = "";
     buildMarkers();
     renderChecklist();
@@ -831,6 +916,8 @@
       toast("Life support reserve is getting low. Make sure you can still get home.");
     }
     if (run.dir > 0) {
+      const note = run.notes.find((n) => !n.shown && run.km >= n.km - 0.12);
+      if (note && !run.alert) { note.shown = true; showCrewAlert(note); } // the next note waits until this one is answered
       const frac = run.km / r.km;
       const ev = r.events[run.eventIdx];
       if (ev && frac >= ev.at) { run.eventIdx++; return openEvent(ev.type); }
@@ -893,7 +980,8 @@
     if (stop.type === "sightsee") {
       run.log.push(`Panorama at ${stop.name}, saved as a view point for the next crew`);
       highlights.push({ id: `v${Date.now()}`, pos: stop.pos.slice(), tag: "view", title: stop.name, note: stop.detail, by: `You, Sol ${D.sol}` });
-      saveHighlights();
+      saveHighlights(); notesVersion++;
+      run.photos = (run.photos || 0) + 1;
     } else run.log.push(`${stop.name}: ${PRODUCT[stop.type][0]} collected (${mins} min on site)`);
     run.atStop = null;
     $("#stop-card").hidden = true;
@@ -1024,15 +1112,131 @@
     $("#end-kicker").textContent = "EVA report · Sol " + D.sol;
     $("#end-title").textContent = title;
     $("#end-text").textContent = text;
+    const outcome = run.rescued ? ["bad", "Rescued"] : run.returnedEarly ? ["warn", "Safe return"] : !missed.length ? ["good", "Mission complete"] : ["accent", "EVA complete"];
+    const stamp = $("#end-stamp"); stamp.className = `end-stamp ${outcome[0]}`; stamp.textContent = outcome[1];
+    // stats count up from zero once the replay has finished
     const stats = $("#end-stats"); stats.innerHTML = "";
-    const add = (dd, dt) => { const d = html("div"); d.append(html("dd", { class: "heading-6" }, dd), html("dt", { class: "caption-5" }, dt)); stats.append(d); };
-    add(`${done.length} / ${stops.length}`, "Tasks done"); add(`${reserve.toFixed(0)} %`, "Life support left"); add(fmtClock(run.minutes), "EVA time"); add(run.dose.toFixed(2), "Dose, mSv");
+    const add = (to, fmt, dt) => { const d = html("div"); const dd = html("dd", { class: "heading-6" }, fmt(0)); dd.dataset.to = to; d.append(dd, html("dt", { class: "caption-5" }, dt)); stats.append(d); return { dd, to, fmt }; };
+    const counters = [
+      add(done.length, (v) => `${Math.round(v)} / ${stops.length}`, "Tasks done"),
+      add(reserve, (v) => `${v.toFixed(0)} %`, "Life support left"),
+      add(run.minutes, (v) => fmtClock(v), "EVA time"),
+      add(run.dose, (v) => v.toFixed(2), "Dose, mSv")
+    ];
+    // science return as chips
+    const ret = $("#end-return"); ret.innerHTML = "";
+    const n = {}; for (const s of done) n[s.type] = (n[s.type] || 0) + 1;
+    for (const k of Object.keys(PRODUCT)) if (n[k]) { const li = html("li", { class: "body-5" }); li.innerHTML = `<i class="ph ${TYPE[k].icon}" aria-hidden="true"></i>`; li.append(document.createTextNode(`${n[k]} ${PRODUCT[k][n[k] > 1 ? 1 : 0]}`)); ret.append(li); }
+    if (!ret.children.length) ret.append(html("li", { class: "body-5 none" }, "No science return this time"));
+    // the hand off: what this crew leaves behind
+    const left = run.photos || 0, rated = run.votes || 0;
+    $("#end-crew-text").textContent = left || rated
+      ? `${left} new note${left === 1 ? "" : "s"} and ${rated} rating${rated === 1 ? "" : "s"} of earlier notes. They are on the shared map now; send the crew log so the next crew gets them too.`
+      : "You left no notes this time. Press P on your next EVA to log hazards, tips and views for whoever drives here next.";
     const log = $("#end-log"); log.innerHTML = "";
-    log.append(html("li", { class: "strong" }, `Science return: ${returnOf(done)}${run.photos ? ` · ${run.photos} crew photo point${run.photos > 1 ? "s" : ""}` : ""}`));
     for (const l of run.log) log.append(html("li", {}, l));
     setScreen("end");
+    playFinish(run, done, counters, outcome[0] === "good");
     $("#btn-again").focus({ preventScroll: true });
   }
+
+  // ---------- Finish animation: the route draws itself, stops pop in, stats count up ----------
+  let finishAnim = 0;
+  function playFinish(run, done, counters, celebrate) {
+    cancelAnimationFrame(finishAnim);
+    const r = run.r, S = $("#end-replay"); S.innerHTML = "";
+    const W = 560, H = 220, pad = 26;
+    const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    // track actually driven: out to the turning point, then the way home
+    const outKm = run.returnedEarly ? run.maxKm : run.rescued ? run.km : r.km;
+    const outPts = slice(r, 0, Math.max(0.001, outKm));
+    const homePts = run.returnedEarly ? outPts.slice().reverse() : [];
+    // fit everything into the box, longitude scaled by cos(latitude)
+    const all = [...r.dense, D.habitat.pos];
+    const k = Math.cos((D.habitat.pos[0] * Math.PI) / 180);
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (const [la, lo] of all) { x0 = Math.min(x0, lo * k); x1 = Math.max(x1, lo * k); y0 = Math.min(y0, la); y1 = Math.max(y1, la); }
+    const sc = Math.min((W - pad * 2) / Math.max(x1 - x0, 1e-6), (H - pad * 2) / Math.max(y1 - y0, 1e-6));
+    const ox = (W - (x1 - x0) * sc) / 2, oy = (H - (y1 - y0) * sc) / 2;
+    const P = ([la, lo]) => [ox + (lo * k - x0) * sc, oy + (y1 - la) * sc];
+    const toD = (pts) => pts.map((p, i) => { const [x, y] = P(p); return `${i ? "L" : "M"}${x.toFixed(1)} ${y.toFixed(1)}`; }).join("");
+    // sky, ground glow and drifting dust
+    const defs = svg("defs", {}, S);
+    const g = svg("linearGradient", { id: "endSky", x1: 0, y1: 0, x2: 0, y2: 1 }, defs);
+    svg("stop", { offset: "0", "stop-color": "#2B1A14" }, g); svg("stop", { offset: "1", "stop-color": "#6E321A" }, g);
+    svg("rect", { width: W, height: H, fill: "url(#endSky)" }, S);
+    const dust = svg("g", { class: "end-dust" }, S);
+    for (let i = 0; i < 36; i++) svg("circle", { cx: (i * 157) % W, cy: (i * 89) % H, r: 0.6 + (i % 3) * 0.5, fill: "#F4C9A3", opacity: 0.15 + (i % 4) * 0.08, style: `animation-delay:${-(i % 9) * 0.7}s` }, dust);
+    // the planned route, faint, then the driven track on top
+    svg("path", { d: toD(r.dense), fill: "none", stroke: "#FFFFFF", "stroke-opacity": 0.22, "stroke-width": 2, "stroke-dasharray": "3 5", "stroke-linejoin": "round" }, S);
+    const outEl = svg("path", { d: toD(outPts), fill: "none", stroke: r.color, "stroke-width": 4, "stroke-linejoin": "round", "stroke-linecap": "round" }, S);
+    const homeEl = homePts.length ? svg("path", { d: toD(homePts), fill: "none", stroke: "#F5B400", "stroke-width": 3, "stroke-dasharray": "8 5", "stroke-linecap": "round" }, S) : null;
+    // stops: done ones fill in as the rover passes them
+    const stopEls = r.allStops.map((s) => {
+      const [x, y] = P(s.pos), ok = run.done.has(s.key);
+      const gEl = svg("g", { class: `end-stop ${ok ? "ok" : "miss"}`, transform: `translate(${x.toFixed(1)} ${y.toFixed(1)})` }, S);
+      svg("circle", { r: 9, fill: ok ? "#FFFFFF" : "none", stroke: ok ? r.color : "#FFFFFF", "stroke-width": 2.5, "stroke-opacity": ok ? 1 : 0.5 }, gEl);
+      const t = svg("text", { "text-anchor": "middle", y: 4, "font-size": 11, "font-weight": 700, "font-family": "Poppins, sans-serif", fill: ok ? r.color : "#FFFFFF", "fill-opacity": ok ? 1 : 0.6 }, gEl);
+      t.textContent = ok ? "✓" : String(s.order);
+      return { gEl, km: s.at * r.km };
+    });
+    // notes this crew left for the next one
+    const t0Run = run.started || 0;
+    const mine = highlights.filter((h) => /^[uv]\d+$/.test(h.id) && Number(h.id.slice(1)) >= t0Run);
+    const noteEls = mine.map((h) => { const [x, y] = P(h.pos); const e = svg("g", { class: "end-note", transform: `translate(${x.toFixed(1)} ${y.toFixed(1)})` }, S); svg("rect", { x: -5, y: -5, width: 10, height: 10, fill: "#7FB2FF", stroke: "#FFFFFF", "stroke-width": 1.5, transform: "rotate(45)" }, e); return e; });
+    const [hx, hy] = P(D.habitat.pos);
+    const hab = svg("g", { transform: `translate(${hx.toFixed(1)} ${hy.toFixed(1)})` }, S);
+    svg("rect", { x: -10, y: -10, width: 20, height: 20, fill: "#C2410C", stroke: "#FFFFFF", "stroke-width": 2 }, hab);
+    const ht = svg("text", { "text-anchor": "middle", y: 4.5, "font-size": 12, "font-weight": 700, "font-family": "Poppins, sans-serif", fill: "#FFFFFF" }, hab); ht.textContent = "A";
+    const rover = svg("circle", { r: 6, fill: "#FFD84D", stroke: "#1D1C1A", "stroke-width": 2, cx: hx, cy: hy }, S);
+
+    const hero = $("#end-hero"), stamp = $("#end-stamp"), burst = $("#end-burst");
+    hero.classList.remove("done"); burst.innerHTML = "";
+    const lenOut = outEl.getTotalLength ? outEl.getTotalLength() : 0, lenHome = homeEl && homeEl.getTotalLength ? homeEl.getTotalLength() : 0;
+    const total = lenOut + lenHome || 1;
+    const finishUp = () => {
+      outEl.style.strokeDasharray = ""; outEl.style.strokeDashoffset = "";
+      if (homeEl) { homeEl.style.strokeDasharray = "8 5"; homeEl.style.strokeDashoffset = ""; }
+      stopEls.forEach((s) => s.gEl.classList.add("in")); noteEls.forEach((e) => e.classList.add("in"));
+      const end = homeEl ? P(D.habitat.pos) : P(outPts[outPts.length - 1]);
+      rover.setAttribute("cx", end[0]); rover.setAttribute("cy", end[1]);
+      hero.classList.add("done");
+      if (celebrate && !reduce) for (let i = 0; i < 14; i++) { const sp = html("span"); sp.style.setProperty("--a", `${(i / 14) * 360}deg`); sp.style.setProperty("--d", `${50 + (i % 3) * 22}px`); burst.append(sp); }
+      countUp(counters, reduce ? 0 : 700);
+      document.querySelectorAll("#end-return li, .end-crew").forEach((el, i) => { el.classList.remove("in"); void el.offsetWidth; el.style.animationDelay = reduce ? "0s" : `${0.15 + i * 0.08}s`; el.classList.add("in"); });
+    };
+    if (reduce || !lenOut) { finishUp(); return; }
+    outEl.style.strokeDasharray = `${lenOut} ${lenOut}`; outEl.style.strokeDashoffset = lenOut;
+    if (homeEl) { homeEl.style.strokeDasharray = `${lenHome} ${lenHome}`; homeEl.style.strokeDashoffset = lenHome; }
+    const kmPerLen = outKm / lenOut;
+    const ms = clamp(1400 + total * 2, 1600, 2800), t0 = performance.now();
+    const easeIO = (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
+    const stepAnim = (now) => {
+      const t = Math.min(1, (now - t0) / ms), L = easeIO(t) * total;
+      if (L <= lenOut) {
+        outEl.style.strokeDashoffset = lenOut - L;
+        const p = outEl.getPointAtLength(L); rover.setAttribute("cx", p.x); rover.setAttribute("cy", p.y);
+        stopEls.forEach((s) => { if (s.km <= L * kmPerLen + 0.02) s.gEl.classList.add("in"); });
+      } else if (homeEl) {
+        outEl.style.strokeDashoffset = 0;
+        stopEls.forEach((s) => s.gEl.classList.add("in"));
+        const l2 = L - lenOut; homeEl.style.strokeDashoffset = lenHome - l2;
+        const p = homeEl.getPointAtLength(l2); rover.setAttribute("cx", p.x); rover.setAttribute("cy", p.y);
+      }
+      if (t < 1 && state.screen === "end") finishAnim = requestAnimationFrame(stepAnim); else finishUp();
+    };
+    finishAnim = requestAnimationFrame(stepAnim);
+  }
+  function countUp(counters, ms) {
+    const t0 = performance.now();
+    const tick2 = (now) => {
+      const t = ms ? Math.min(1, (now - t0) / ms) : 1, e = 1 - Math.pow(1 - t, 3);
+      for (const c of counters) c.dd.textContent = c.fmt(c.to * e);
+      if (t < 1) requestAnimationFrame(tick2);
+    };
+    requestAnimationFrame(tick2);
+  }
+  $("#btn-end-export").addEventListener("click", () => exportLog());
   function renderTotals() {
     const t = state.totals;
     const pl = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
@@ -1042,6 +1246,7 @@
   function backToPlan() {
     state.run = null; state.playerMarker = null;
     $("#stop-card").hidden = true;
+    $("#crew-alert").hidden = true;
     setCond("#cond-dust", "Low", "good"); setCond("#cond-rad", "Normal", "good");
     setScreen("plan");
     renderPlan(); buildMarkers(); drawOverlays(); fitRoute();
@@ -1284,6 +1489,7 @@
       if (k === "f") state.run.fast = !state.run.fast;
       if (k === "s") collectSample();
       if (k === "p") { e.preventDefault(); openPhoto(); }
+      if ((k === "y" || k === "n") && !$("#crew-alert").hidden) answerAlert(k === "y");
     }
   });
 
@@ -1295,22 +1501,164 @@
     view: { label: "View", icon: "ph-mountains" }
   };
   const SEED = [
-    { id: "s1", pos: [18.4290, 77.4236], tag: "hazard", title: "Ripples deeper than they look", note: "Wheels sank about 20 cm here. Stay on the bedrock strip to the north.", by: "Crew 2, Sol 11", seed: true },
-    { id: "s2", pos: [18.4512, 77.4046], tag: "tip", title: "Firm strip beside the depot", note: "Flat and rock free. Easiest driving on the whole delta front.", by: "Crew 2, Sol 14", seed: true },
+    { id: "s1", pos: [18.4290, 77.4236], tag: "hazard", title: "Ripples deeper than they look", note: "Wheels sank about 20 cm here. Stay on the bedrock strip to the north.", by: "Crew 2, Sol 11", confirms: 1, seed: true },
+    { id: "s2", pos: [18.4512, 77.4046], tag: "tip", title: "Firm strip beside the depot", note: "Flat and rock free. Easiest driving on the whole delta front.", by: "Crew 2, Sol 14", confirms: 2, seed: true },
     { id: "s3", pos: [18.4596, 77.3936], tag: "science", title: "Thin mudstone layers", note: "Best exposure at waist height on the north face. Bring the close up imager.", by: "Crew 3, Sol 4", seed: true },
-    { id: "s4", pos: [18.4652, 77.4012], tag: "view", title: "Delta panorama", note: "Walk 20 m up the gap for a view over the whole crater floor.", by: "Crew 3, Sol 6", seed: true },
-    { id: "s5", pos: [18.4565, 77.3205], tag: "hazard", title: "Loose scree on the rim slope", note: "Footing slides on the steeper part. Keep to the ridge line.", by: "Crew 3, Sol 19", seed: true }
+    { id: "s4", pos: [18.4652, 77.4012], tag: "view", title: "Delta panorama", note: "Walk 20 m up the gap for a view over the whole crater floor.", by: "Crew 3, Sol 6", confirms: 1, seed: true },
+    { id: "s5", pos: [18.4565, 77.3205], tag: "hazard", title: "Loose scree on the rim slope", note: "Footing slides on the steeper part. Keep to the ridge line.", by: "Crew 3, Sol 19", seed: true },
+    { id: "s6", pos: [18.4455, 77.4372], tag: "hazard", title: "Soft drift across the track", note: "Fresh sand piled up after the last dust event. Rover crawled through at 2 km/h.", by: "Crew 4, Sol 2", seed: true },
+    { id: "s7", pos: [18.4548, 77.4140], tag: "tip", title: "Shade for a suit check", note: "The delta scarp throws shade here after 14:00. Good spot to cool the suit and check seals.", by: "Crew 4, Sol 5", confirms: 1, seed: true }
   ];
   const STORE = "momoot.photoPoints.v1";
+  const VOTES = "momoot.photoVotes.v1";
   function loadHighlights() { try { return JSON.parse(localStorage.getItem(STORE) || "[]"); } catch { return []; } }
   function saveHighlights() { try { localStorage.setItem(STORE, JSON.stringify(highlights.filter((h) => !h.seed))); } catch { toast("This browser could not save the photo point. It stays until you reload."); } }
   let highlights = [...SEED, ...loadHighlights()];
+  // How later crews rate a note: confirmed (still there) or reported gone
+  let votes = (() => { try { return JSON.parse(localStorage.getItem(VOTES) || "{}"); } catch { return {}; } })();
+  function saveVotes() { try { localStorage.setItem(VOTES, JSON.stringify(votes)); } catch { /* kept in memory */ } }
+  const confirmsOf = (h) => (h.confirms || 0) + ((votes[h.id] || {}).up || 0);
+  const goneOf = (h) => (h.gone || 0) + ((votes[h.id] || {}).gone || 0);
+  const isActive = (h) => goneOf(h) <= confirmsOf(h);
+  const crewOf = (h) => String(h.by || "Unknown crew").split(",")[0];
+  function statusOf(h) {
+    const c = confirmsOf(h), g = goneOf(h);
+    if (!isActive(h)) return `Reported gone by ${g} crew${g > 1 ? "s" : ""}${h.tag === "hazard" ? ", no longer avoided" : ""}`;
+    if (c) return `Confirmed by ${c} later crew${c > 1 ? "s" : ""}`;
+    return "Not confirmed yet";
+  }
+  let notesVersion = 0; // bumps whenever notes or votes change, so route intel is recomputed
   state.showPhotos = true;
   const snapCache = {};
 
   function applyCrewHazards() {
-    Planner.setPointHazards(D, highlights.filter((h) => h.tag === "hazard").map((h) => ({ pos: h.pos, r: 40 })));
+    Planner.setPointHazards(D, highlights.filter((h) => h.tag === "hazard" && isActive(h)).map((h) => ({ pos: h.pos, r: 40 })));
   }
+
+  // Notes within maxKm of a route, in the order the crew will pass them
+  function notesAlong(r, maxKm = 0.2) {
+    if (r._notes && r._notes.v === notesVersion && r._notes.max === maxKm) return r._notes.list;
+    const list = [];
+    for (const h of highlights) {
+      let best = Infinity, bi = 0;
+      for (let i = 0; i < r.dense.length; i++) { const d = MarsMap.distanceKm(h.pos, r.dense[i]); if (d < best) { best = d; bi = i; } }
+      if (best <= maxKm) list.push({ h, km: r.cum[bi], off: best });
+    }
+    list.sort((a, b) => a.km - b.km);
+    r._notes = { v: notesVersion, max: maxKm, list };
+    return list;
+  }
+
+  function renderRouteNotes(r) {
+    const list = notesAlong(r);
+    const ol = $("#intel-list"); ol.innerHTML = "";
+    $("#intel-count").textContent = `${list.length} note${list.length === 1 ? "" : "s"}`;
+    const haz = list.filter((x) => x.h.tag === "hazard" && isActive(x.h)).length;
+    const crews = new Set(list.map((x) => crewOf(x.h))).size;
+    $("#intel-lead").textContent = list.length
+      ? `${crews} earlier crew${crews > 1 ? "s" : ""} left notes within 200 m of the ${r.label.toLowerCase()} route.${haz ? ` The planner already steers around ${haz} active hazard report${haz > 1 ? "s" : ""}.` : ""} You will get each note on screen as you pass it.`
+      : "No crew has left a note along this route yet. Be the first: press P during the EVA.";
+    for (const { h, km, off } of list) {
+      const li = html("li", { class: `intel-item${isActive(h) ? "" : " gone"}` });
+      const b = html("button", { class: "intel-btn", type: "button" });
+      const tag = html("span", { class: `tag ${h.tag}` }); tag.innerHTML = `<i class="ph-fill ${TAGS[h.tag].icon}" aria-hidden="true"></i>`;
+      const t = html("span", { class: "intel-t" });
+      t.append(html("span", { class: "title-4" }, h.title), html("span", { class: "caption-5 muted" }, `${km.toFixed(1)} km in · ${Math.round(off * 1000)} m from the route · ${crewOf(h)} · ${statusOf(h)}`));
+      b.append(tag, t);
+      b.addEventListener("click", () => map.flyTo(h.pos[0], h.pos[1], 16.8, 700));
+      li.append(b);
+      ol.append(li);
+    }
+    renderLogStats();
+  }
+
+  function renderLogStats() {
+    const crews = new Set(highlights.map(crewOf)).size;
+    const haz = highlights.filter((h) => h.tag === "hazard" && isActive(h)).length;
+    const mine = highlights.filter((h) => !h.seed).length;
+    $("#crew-log-stats").textContent = `${highlights.length} notes from ${crews} crews · ${haz} active hazard reports · ${mine} logged or loaded on this device`;
+  }
+
+  // During the EVA: show each crew note as the rover reaches it
+  function showCrewAlert(n) {
+    const h = n.h, run = state.run;
+    run.alert = n;
+    $("#ca-kicker").textContent = `${TAGS[h.tag].label} note from ${crewOf(h)}`;
+    $("#ca-icon").className = `ph-fill ${TAGS[h.tag].icon}`;
+    $("#crew-alert").className = `block crew-alert ${h.tag}`;
+    $("#ca-title").textContent = h.title;
+    $("#ca-note").textContent = h.note;
+    $("#ca-by").textContent = `${h.by} · ${statusOf(h)}`;
+    const hz = h.tag === "hazard";
+    $("#btn-ca-yes").firstChild.textContent = hz ? "Still there " : "Helpful ";
+    $("#btn-ca-no").firstChild.textContent = hz ? "Gone now " : "Not useful ";
+    $("#crew-alert").hidden = false;
+    toast(`Crew note ahead: ${h.title}`);
+  }
+  function answerAlert(up) {
+    const run = state.run; if (!run || !run.alert) return;
+    const h = run.alert.h, hz = h.tag === "hazard";
+    const v = (votes[h.id] ||= { up: 0, gone: 0 });
+    if (up) v.up++; else if (hz) v.gone++;
+    saveVotes(); notesVersion++;
+    run.votes = (run.votes || 0) + 1;
+    run.log.push(up ? `Confirmed ${crewOf(h)}'s note: ${h.title}` : hz ? `Reported ${crewOf(h)}'s hazard as gone: ${h.title}` : `Rated ${crewOf(h)}'s note not useful: ${h.title}`);
+    if (hz) { applyCrewHazards(); for (const m of D.missions) planMission(m); }
+    run.alert = null;
+    $("#crew-alert").hidden = true;
+    buildMarkers();
+    toast(up ? "Thanks. The next crew will see your confirmation." : hz ? "Logged. Once more crews agree, routes stop avoiding it." : "Logged.");
+  }
+  $("#btn-ca-yes").addEventListener("click", () => answerAlert(true));
+  $("#btn-ca-no").addEventListener("click", () => answerAlert(false));
+
+  // Crew log: the file one crew hands to the next (or another device)
+  function exportLog() {
+    const pts = highlights.filter((h) => !h.seed);
+    const doc = { format: "momoot-crew-log", version: 1, exported: new Date().toISOString(), site: D.site, sol: D.sol, points: pts, votes };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(doc)], { type: "application/json" }));
+    const a = html("a", { href: url, download: `momoot-crew-log-sol${D.sol}.json` });
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    toast(`Crew log saved: ${pts.length} note${pts.length === 1 ? "" : "s"} and ${Object.keys(votes).length} ratings. Load it on the next crew's device.`);
+  }
+  const [[pS, pW], [pN, pE]] = D.planArea;
+  function cleanPoint(p) {
+    if (!p || typeof p !== "object" || !Array.isArray(p.pos) || p.pos.length !== 2) return null;
+    const lat = Number(p.pos[0]), lon = Number(p.pos[1]);
+    if (!(lat > pS - 0.5 && lat < pN + 0.5 && lon > pW - 0.5 && lon < pE + 0.5)) return null;
+    if (!TAGS[p.tag] || typeof p.title !== "string" || !p.title.trim()) return null;
+    const s = (v, n) => String(v == null ? "" : v).slice(0, n);
+    const out = { id: s(p.id || `i${Date.now()}${Math.random()}`, 40), pos: [lat, lon], tag: p.tag, title: s(p.title, 60), note: s(p.note || "No note.", 240), by: s(p.by || "Another crew", 40) };
+    if (typeof p.img === "string" && /^data:image\/(jpeg|png|webp);base64,/.test(p.img) && p.img.length < 400000) out.img = p.img;
+    return out;
+  }
+  function importLog(file) {
+    const rd = new FileReader();
+    rd.onload = () => {
+      let doc;
+      try { doc = JSON.parse(rd.result); } catch { toast("That file is not a Momoot crew log."); return; }
+      if (!doc || doc.format !== "momoot-crew-log" || !Array.isArray(doc.points)) { toast("That file is not a Momoot crew log."); return; }
+      const have = new Set(highlights.map((h) => h.id));
+      let added = 0;
+      for (const raw of doc.points) { const p = cleanPoint(raw); if (p && !have.has(p.id)) { highlights.push(p); have.add(p.id); added++; } }
+      if (doc.votes && typeof doc.votes === "object") {
+        for (const [id, v] of Object.entries(doc.votes)) {
+          if (!have.has(id) || !v) continue;
+          const mine = (votes[id] ||= { up: 0, gone: 0 });
+          mine.up = Math.max(mine.up, Math.min(99, Number(v.up) || 0));
+          mine.gone = Math.max(mine.gone, Math.min(99, Number(v.gone) || 0));
+        }
+      }
+      saveHighlights(); saveVotes(); notesVersion++;
+      applyCrewHazards(); for (const m of D.missions) planMission(m);
+      if (!state.run) { renderPlan(); buildMarkers(); drawOverlays(); }
+      toast(added ? `Loaded ${added} new note${added > 1 ? "s" : ""} from another crew. Routes were re planned.` : "No new notes in that log. Ratings were merged.");
+    };
+    rd.readAsText(file);
+  }
+  $("#btn-log-export").addEventListener("click", exportLog);
+  $("#log-import").addEventListener("change", (e) => { const f = e.target.files && e.target.files[0]; if (f) importLog(f); e.target.value = ""; });
 
   // A real HiRISE snapshot of the spot, cut from the Mars Trek tiles
   function snapshot(lat, lon) {
@@ -1349,13 +1697,13 @@
     const ul = $("#highlights"); ul.innerHTML = "";
     const list = [...highlights].reverse();
     for (const h of list) {
-      const li = html("li", { class: "hl" });
+      const li = html("li", { class: `hl${isActive(h) ? "" : " gone"}` });
       const fig = html("figure", { class: "img" }); fillPhoto(fig, h);
       const tx = html("div", { class: "txt" });
       const tag = html("span", { class: `tag ${h.tag}` }); tag.innerHTML = `<i class="ph-fill ${TAGS[h.tag].icon}" aria-hidden="true"></i>`; tag.append(document.createTextNode(TAGS[h.tag].label));
       const go = html("button", { class: "wp-link body-5", type: "button" }, "Show on map");
       go.addEventListener("click", () => map.flyTo(h.pos[0], h.pos[1], 16.8, 700));
-      tx.append(tag, html("p", { class: "title-3" }, h.title), html("p", { class: "body-6 muted" }, h.note), html("p", { class: "caption-5 muted" }, h.by), go);
+      tx.append(tag, html("p", { class: "title-3" }, h.title), html("p", { class: "body-6 muted" }, h.note), html("p", { class: "caption-5 muted" }, `${h.by} · ${statusOf(h)}`), go);
       li.append(fig, tx);
       ul.append(li);
     }
@@ -1383,7 +1731,7 @@
     const img = $("#photo-preview img");
     if (img && img.src.startsWith("data:")) h.img = img.src;
     highlights.push(h);
-    saveHighlights();
+    saveHighlights(); notesVersion++;
     const run = state.run;
     if (run) { run.photos = (run.photos || 0) + 1; run.log.push(`Left a ${TAGS[tag].label.toLowerCase()} photo point: ${title}`); renderChecklist(); }
     $("#photo-count").textContent = `${run ? run.photos : 0} photo points logged on this EVA.`;
@@ -1449,6 +1797,8 @@
   $("#sol-label").textContent = `Sol ${D.sol}`;
   $("#sol-inline").textContent = D.sol;
   $("#cond-temp").textContent = `−${Math.abs(D.conditions.tempC)} °C`;
+  applyWeather();
+  loadLiveWeather();
   $("#tasks-sol").textContent = D.sol;
   renderPlan();
   buildMarkers();
