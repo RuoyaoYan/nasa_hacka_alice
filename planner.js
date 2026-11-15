@@ -360,41 +360,6 @@
     return { order: bestPath || [...Array(n + 1).keys()], cost: best, nodes, orders: fact };
   }
 
-  // String pulling: replace grid zigzags with straight segments wherever the
-  // straight line is just as safe (no cell costlier than the path it replaces).
-  function pullString(cells, W) {
-    if (cells.length < 3) return cells;
-    const rc = (i) => [(i / G.cols) | 0, i % G.cols];
-    const fin = (x) => (x === Infinity ? 60 : x); // targets can sit on steep cells; never let that open the gate
-    // cost of the grid path up to each cell (cell cost x step length), like Dijkstra measured it
-    const cum = [0];
-    for (let k = 1; k < cells.length; k++) {
-      const [r0, c0] = rc(cells[k - 1]), [r1, c1] = rc(cells[k]);
-      cum.push(cum[k - 1] + Math.hypot(r1 - r0, c1 - c0) * (fin(cellCost(G, cells[k - 1], W)) + fin(cellCost(G, cells[k], W))) / 2);
-    }
-    const out = [cells[0]];
-    let a = 0;
-    while (a < cells.length - 1) {
-      let best = a + 1;
-      for (let b = a + 2; b < cells.length && b < a + 40; b++) {
-        const [r0, c0] = rc(cells[a]), [r1, c1] = rc(cells[b]);
-        const len = Math.hypot(r1 - r0, c1 - c0), steps = Math.ceil(len * 4);
-        let sum = 0, ok = true;
-        for (let s = 1; s < steps && ok; s++) {
-          const r = Math.floor(r0 + 0.5 + ((r1 - r0) * s) / steps), c = Math.floor(c0 + 0.5 + ((c1 - c0) * s) / steps);
-          const cc = cellCost(G, r * G.cols + c, W);
-          if (cc === Infinity) ok = false; else sum += cc;
-        }
-        // straighten only where it costs no more than the bends it replaces: on even ground the
-        // staircase becomes a line, but bends around hills, boulders and rough patches stay
-        if (ok && (sum / Math.max(1, steps - 1)) * len <= (cum[b] - cum[a]) * 1.01) best = b;
-      }
-      out.push(cells[best]);
-      a = best;
-    }
-    return out;
-  }
-
   // Chaikin corner cutting: turns grid staircases into smooth driven curves
   function smooth(pts, iters = 3) {
     let p = pts;
@@ -502,8 +467,9 @@
       const cellsPath = [];
       for (let i = cells[b]; i !== -1 && i !== cells[a]; i = runs[a].prev[i]) cellsPath.push(i);
       cellsPath.reverse();
-      const pulled = pullString([cells[a], ...cellsPath], runW);
-      const leg = [pts[a], ...pulled.slice(1, -1).map((i) => G.ll((i / G.cols) | 0, i % G.cols)), pts[b]];
+      // no straightening: the line follows the cost grid cell by cell (every bend the costs ask for), then is smoothed
+      const path = [cells[a], ...cellsPath];
+      const leg = [pts[a], ...path.slice(1, -1).map((i) => G.ll((i / G.cols) | 0, i % G.cols)), pts[b]];
       let sm = smooth(densifyLeg(leg), 3);
       if (runW.rock === Infinity) sm = hugOutline(sm, CLEAR_M + 10);
       legs.push(sm);
