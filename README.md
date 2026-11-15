@@ -7,6 +7,17 @@ Pick today's science mission, compare three routes built from NASA orbiter data,
 then walk it. Conditions on Mars change, so dust storms, solar particle events
 and rough terrain force you to adapt on the way.
 
+## 🎬 Demo video
+
+[![Momoot demo: pick today's tasks, get three routes over NASA imagery, then change your mind and replan](docs/demo/momoot_demo.gif)](docs/demo/momoot_demo.mp4)
+
+A 15 second walkthrough (sped up): pick today's tasks and a landing site, watch the
+hazard scan sweep the HiRISE imagery, compare the Safest, Fastest and Easiest routes
+with their route details, then press **Change your mind?**, add tasks, and see all
+three routes redesigned.
+
+▶ **[Watch the full quality MP4](https://ruoyaoyan.github.io/nasa_hacka_alice/docs/demo/momoot_demo.mp4)** (1080p, no sound)
+
 ## ▶ Play now
 
 **https://ruoyaoyan.github.io/nasa_hacka_alice/**
